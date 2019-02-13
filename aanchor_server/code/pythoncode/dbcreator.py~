@@ -1,0 +1,212 @@
+import glob
+import os
+import sys
+import cPickle
+import gzip
+import Bio
+import EMAN2
+import numpy
+from Bio.PDB.PDBParser import PDBParser
+from EMAN2 import EMData
+
+
+from process_rotamers_data import read_rotamers_data_text_file
+from process_rotamers_data import get_mrc_file_name,get_pdb_id
+
+
+class BoxCenterAtCG(object):
+    @staticmethod
+    def get_box_center(residue):
+        cg =numpy.array([0,0,0])
+        natoms = 0.0
+        for atom in residue.child_dict.values():
+            cg = cg + atom.get_coord()
+            natoms+=1
+        cg = cg/natoms
+        return cg[0],cg[1],cg[2]
+
+
+class LabelbyAAType(object):
+
+    label_dict = {"ALA":1,"ARG":2,"ASN":3,"ASP":4,"CYS":5,"CYH":5,"CYD":5,
+    "GLN":6,"GLU":7,"GLY":8,"HIS":9,"ILE":10,
+    "LEU":11,"LYS":12,"MET":13,"PHE":14,"PRO":15,"TPR":15,"CPR":15,
+    "SER":16,"THR":17,"TRP":18,"TYR":19,"VAL":20}
+    
+    @staticmethod
+    def calc_label(res_data):
+        """return the label assosiated with current entry in the rotamers data base
+        """
+        return LabelbyAAType.label_dict.get(res_data["Type"],0)
+    
+    @staticmethod
+    def print_labels(file_name):
+        """prints labels to a text file"""
+        text_file = open(file_name, "w")
+        for ky in LabelbyAAType.label_dict.keys():
+            text_file.write(str(ky)+' : ' + str(LabelbyAAType.label_dict[ky])+"\n")
+        text_file.close()
+
+
+class DBcreator(object):
+
+    def __init__(self, input_pdb_folder, mrc_maps_folder,database_folder,database_file_name,
+     list_file_name,resolution,apix=1.0,label = LabelbyAAType,box_center = BoxCenterAtCG,
+     cubic_box_size = 11):
+        """
+
+
+        """
+
+        self.input_pdb_folder = input_pdb_folder+'/'
+        self.mrc_maps_folder = mrc_maps_folder+'/'
+        self.database_folder = database_folder+'/'
+        self.database_file_name = database_file_name
+        self.res = resolution
+        self.apix = apix
+        self.rotamers_by_pdb_dict = read_rotamers_data_text_file(list_file_name)
+        self.label = label
+        self.label_statistics = {}
+        self.calc_all_labels()
+        self.box_center = box_center 
+        self.box_size = cubic_box_size
+
+        self.parser = PDBParser(PERMISSIVE=1)
+
+
+
+    
+    def xyz2ijk(self,mrc_map,x,y,z):
+        i = int(round((x-mrc_map.get_attr('origin_x'))/mrc_map.get_attr('apix_x')))
+        j = int(round((y-mrc_map.get_attr('origin_y'))/mrc_map.get_attr('apix_y')))
+        k = int(round((z-mrc_map.get_attr('origin_z'))/mrc_map.get_attr('apix_z')))
+
+	new_x = i*mrc_map.get_attr('apix_x')+mrc_map.get_attr('origin_x')
+	new_y = j*mrc_map.get_attr('apix_y')+mrc_map.get_attr('origin_y')
+	new_z = k*mrc_map.get_attr('apix_z')+mrc_map.get_attr('origin_z')
+
+        return i,j,k , new_x, new_y, new_z
+    
+    def extract_cubic_box_with_center_at(self,mrc_map,x,y,z):
+        n = self.box_size
+        #create array
+        outbox = numpy.zeros([n,n,n])
+	outbox_x  = numpy.zeros([n,n,n])
+	outbox_y  = numpy.zeros([n,n,n])
+	outbox_z  = numpy.zeros([n,n,n])
+		
+        # fill array 
+        Xc,Yc,Zc,new_x, new_y, new_z = self.xyz2ijk(mrc_map,x,y,z)
+        
+        for inx in range(-(n-1)/2,(n-1)/2+1):
+
+            if ((Xc-inx)<0.0) |(( Xc+inx)>=mrc_map.get_xsize()):
+                continue
+            for iny in range(-(n-1)/2,(n-1)/2+1):
+                if ((Yc-iny)<0.0) |(( Yc+iny)>=mrc_map.get_ysize()):
+                    continue
+                for inz in range(-(n-1)/2,(n-1)/2+1):
+                    if ((Zc-inz)<0.0) | ((Zc+inz)>=mrc_map.get_zsize()):
+                        continue
+                    outbox[inx+(n-1)/2,iny+(n-1)/2,inz+(n-1)/2] = mrc_map.get_value_at(Xc+inx,Yc+iny,Zc+inz)
+		    outbox_x[inx+(n-1)/2,iny+(n-1)/2,inz+(n-1)/2] = Xc+inx
+		    outbox_y[inx+(n-1)/2,iny+(n-1)/2,inz+(n-1)/2] = Yc+iny
+		    outbox_z[inx+(n-1)/2,iny+(n-1)/2,inz+(n-1)/2] = Zc+inz
+					
+        #return
+        return outbox,outbox_x, outbox_y ,outbox_z           
+    
+    def print_labels_to_file(self,file_name):
+        self.label.print_labels(file_name)
+
+
+    def create_all_mrc_maps(self):
+        input_pdb_folder = self.input_pdb_folder
+        output_mrc_folder = self.mrc_maps_folder
+        res = self.res
+        apix = self.apix
+        #get  list of pdb files
+        list_of_pdb_files = glob.glob1(input_pdb_folder,'*.pdb')
+        for pdb_file in list_of_pdb_files:
+            pdb_id = get_pdb_id(pdb_file)
+            if not pdb_id in self.rotamers_by_pdb_dict.keys():
+                #pdb id not in list
+                continue
+
+            #create map
+            map4A = pdb_2_mrc(input_pdb_folder+pdb_file,apix,res,het=False,box=None,chains="AB",model=None,center=False,quiet=True)
+            #save map
+            mrc_file_name = get_mrc_file_name(pdb_id,self.res,self.apix)
+            map4A.write_image(output_mrc_folder+mrc_file_name)
+    def calc_all_labels(self):
+        for pdb_id in self.rotamers_by_pdb_dict.keys():
+            dict_of_chains = self.rotamers_by_pdb_dict[pdb_id]
+            for chain_ID in dict_of_chains.keys():
+                dict_of_resnums = dict_of_chains[chain_ID]
+                for resnum in dict_of_resnums.keys():
+                    res_data = dict_of_resnums[resnum]
+                    label_num = self.label.calc_label(res_data)
+                    res_data["label"] = self.label.calc_label(res_data)
+                    self.label_statistics[label_num] = self.label_statistics.get(label_num,0)+1
+        return
+    
+    def save_training_pairs(self, training_pairs, debug_data=[],filename="NONE"):
+	if filename== "NONE":
+		filename = self.database_folder+self.database_file_name+"default.pkl.gz"	
+    	f = gzip.open(filename, "w")
+    	cPickle.dump((training_pairs, debug_data), f)
+    	f.close()
+
+    def test_residue_data(self,res_struct, res_data):
+	""" test by name """
+	struct_type = 	res_struct.get_resname()
+	list_type = res_data["Type"]
+	if struct_type == list_type:
+	    return True
+	if struct_type == 'PRO' and list_type in ["TPR","CPR"]:
+	    return True
+	if struct_type == 'CYS' and list_type in ["CYH","CYD"]:
+	    return True
+	return False
+	
+    def calc_all_training_pairs_for_pdb(self, pdb_id):
+	#empty list
+	training_pairs = []
+	PDB_chain_resnum_for_debug = []
+
+        #load pdb and mrc
+        pdb_file_name = pdb_id+'_H.pdb'
+        strct = self.parser.get_structure(pdb_id,self.input_pdb_folder + pdb_file_name)
+        #mrc file name 
+        mrc_file_name = get_mrc_file_name(pdb_id,self.res,self.apix)
+        mrc_map = EMData()
+        mrc_map.read_image(self.mrc_maps_folder + mrc_file_name,0)
+        # pdb data in text file
+        pdb_list_data = self.rotamers_by_pdb_dict[pdb_id]
+        ## loop on all residues in this pdb
+        #get model 0
+        mdl = strct.child_dict[0]
+        for chainId in pdb_list_data.keys():
+            chain_list = pdb_list_data[chainId]
+            chain_strct = mdl.child_dict.get(chainId,-1)
+	    if chain_strct ==-1:
+		continue
+            for resnum in chain_list.keys():
+                res_data = chain_list[resnum]
+                res_strct = chain_strct.child_dict.get((' ',resnum,' '),-1)
+	        if res_strct ==-1:
+	            continue
+		if self.test_residue_data(res_struct, res_data)==False:
+		    continue
+                x,y,z = self.box_center.get_box_center(res_strct)
+		#correct for nearby integer
+		i_o,j_o,k_o ,x,y,z = self.xyz2ijk(mrc_map,x,y,z) 
+                box_imag, outbox_x, outbox_y ,outbox_z      = self.extract_cubic_box_with_center_at(mrc_map,x,y,z)
+                training_pairs.append((numpy.reshape(box_imag, self.box_size**3), numpy.int64(res_data["label"])))
+                PDB_chain_resnum_for_debug.append({"pdb_id":pdb_id,"chainId":chainId,"resnum":resnum,"center":(x,y,z)})
+		PDB_chain_resnum_for_debug[-1]["outbox_x"] = outbox_x
+		PDB_chain_resnum_for_debug[-1]["outbox_y"] = outbox_y
+		PDB_chain_resnum_for_debug[-1]["outbox_z"] = outbox_z
+	training_pairs_list = [list(d) for d in zip(*training_pairs)]
+        return training_pairs_list, PDB_chain_resnum_for_debug
+
