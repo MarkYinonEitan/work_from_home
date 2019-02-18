@@ -30,14 +30,14 @@ try:
 except ImportError:
     print "RUN Without Chimera"
 
-SERVER_DIR = "/Users/markroza/Documents/work_from_home/aanchor_server/"
+SERVER_DIR = "/Users/markroza/Documents/GitHub/work_from_home/aanchor_server"
 # SERVER_DIR = "/specific/a/home/cc/cs/ppdock/webserver/AAnchor/"
-WORK_DIR = "/Users/markroza/Documents/work_from_home/aanchor_server/upload/"
+WORK_DIR = "/Users/markroza/Documents/work_from_home/data/aanchor_server/upload/"
 # WORK_DIR = "/specific/disk1/webservertmp/AAnchor/upload/"
 
 
 
-DEBUG_FILE =SERVER_DIR + "/temp/temp_python.txt"
+DEBUG_FILE =WORK_DIR + "/temp/temp_python.txt"
 
 PDB_FILE_LINE = "HETATM AAAA  K   RES ABBBB     XXXXXXX YYYYYYY ZZZZZZZ  0.25 PPPP           K  "
 
@@ -46,7 +46,7 @@ PDB_FILE_LINE = "HETATM AAAA  K   RES ABBBB     XXXXXXX YYYYYYY ZZZZZZZ  0.25 PP
 # UPLOAD_DIR = "/specific/netapp5_2/iscb/wolfson/Mark/Projects/NNcryoEM/data/temp"
 
 
-NETS_FOLDER = SERVER_DIR + "/bin/nets_data/"
+NETS_FOLDER = SERVER_DIR + "/nets_data/"
 
 
 def get_thr_data(res):
@@ -54,27 +54,27 @@ def get_thr_data(res):
     thr_data=[]
 
     if res == "2.3":
-        thr_data.append({"AA":"ARG","combination":"maj3","thr":0.3-0.3})
-        thr_data.append({"AA":"LEU","combination":"mean3","thr":0.3})
-        thr_data.append({"AA":"PRO","combination":"NES","thr":0.65-0.3})
-        thr_data.append({"AA":"VAL","combination":"mean3","thr":0.3-0.3})
+        thr_data.append({"AA":"ARG","combination":"maj3","thr":0.1})
+        thr_data.append({"AA":"LEU","combination":"mean3","thr":0.37})
+        thr_data.append({"AA":"PRO","combination":"NES","thr":0.15})
+        thr_data.append({"AA":"VAL","combination":"mean3","thr":0.25})
 
     if res == "2.8":
-        thr_data.append({"AA":"ASN","combination":"NE","thr":0.35})
-        thr_data.append({"AA":"ARG","combination":"NE","thr":0.65})
-        thr_data.append({"AA":"LEU","combination":"NE","thr":0.7})
-        thr_data.append({"AA":"LYS","combination":"mean2","thr":0.45})
-        thr_data.append({"AA":"PRO","combination":"maj3","thr":0.5})
-        thr_data.append({"AA":"TYR","combination":"maj3","thr":0.35})
-        thr_data.append({"AA":"VAL","combination":"NE","thr":0.35})
+        thr_data.append({"AA":"ASN","combination":"NE","thr":0.37})
+        thr_data.append({"AA":"ARG","combination":"NE","thr":0.65-0.65})
+        thr_data.append({"AA":"LEU","combination":"NE","thr":0.7-0.7 })
+        thr_data.append({"AA":"LYS","combination":"mean2","thr":0.45-0.15})
+        thr_data.append({"AA":"PRO","combination":"maj3","thr":0.5-0.5})
+        thr_data.append({"AA":"TYR","combination":"maj3","thr":0.35-0.35})
+        thr_data.append({"AA":"VAL","combination":"NE","thr":0.38})
 
     if res == "3.1":
         thr_data.append({"AA":"ARG","combination":"NES","thr":0.6})
-        thr_data.append({"AA":"GLY","combination":"NE","thr":0.5})
-        thr_data.append({"AA":"LEU","combination":"NE","thr":0.7})
-        thr_data.append({"AA":"LYS","combination":"NE","thr":0.65})
-        thr_data.append({"AA":"PRO","combination":"mean2","thr":0.65})
-        thr_data.append({"AA":"TYR","combination":"maj3","thr":0.3})
+        thr_data.append({"AA":"GLY","combination":"NE","thr":0.9})
+        thr_data.append({"AA":"LEU","combination":"NE","thr":0.75})
+        thr_data.append({"AA":"LYS","combination":"NE","thr":0.7})
+        thr_data.append({"AA":"PRO","combination":"mean2","thr":0.75})
+        thr_data.append({"AA":"TYR","combination":"maj3","thr":0.00})
 
     return thr_data
 

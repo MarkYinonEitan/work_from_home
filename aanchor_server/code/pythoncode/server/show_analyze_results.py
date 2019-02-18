@@ -36,21 +36,12 @@ def calcCg_of_res(residue):
     return cg[0],cg[1],cg[2]
 
 
-def stam():
-
-    for res in res_prot.residues:
-        inxs, ress = kdt4.in_range(res.findAtom('K').coord(),THR_DIST)
-        print(res)
-        print(ress)
-        print("####")
-
-    print ('Marik')
 
 
 def load_data(emd_map_file, res_prot_file, ref_pdb_file = None):
 
     if ref_pdb_file != None:
-        ref_prot = chimera.openModels.open(ref_pdb_file,'PDB')[0]
+        ref_prot = chimera.openModels.open(ref_pdb_file,'PDB')
     else:
         ref_prot = None
     res_prot = chimera.openModels.open(res_pdb_file,'PDB')[0]
@@ -64,16 +55,16 @@ def color_map(map, res_prot):
 
 def test_results(out_pdb_file, ref_pdb_file , out_file = 't1.txt'):
     #load files
-    ref_prot = chimera.openModels.open(ref_pdb_file,'PDB')[0]
+    ref_prot = chimera.openModels.open(ref_pdb_file,'PDB')
     out_prot = chimera.openModels.open(out_pdb_file,'PDB')[0]
     # create -kdtree
     res_data=[]
     res_cg = []
 
-    for res in ref_prot.residues:
-        #res_data.append({'type':res.type,'chain':res.id.chainId, 'pos':res.id.position})
-        res_data.append(res)
-        res_cg.append(calcCg_of_res(res))
+    for ref_model in ref_prot:
+        for res in ref_model.residues:
+            res_data.append(res)
+            res_cg.append(calcCg_of_res(res))
 
     kdt4 = KDTree_3D_objects(res_cg,res_data)
 
@@ -87,20 +78,63 @@ def test_results(out_pdb_file, ref_pdb_file , out_file = 't1.txt'):
             n_false=0
             f.write(residue_type+'\n')
             for res in out_residues:
-                position = res.findAtom('K').coord()
+                atm = res.findAtom('K')
+                position = atm.coord()
+                f.write(str(atm.residue.id.position) + ' : ' +str(atm.bfactor)+' ### ')
                 inxs, ress = kdt4.in_range(position,THR_DIST)
                 if len(inxs) !=1:
-                    f.write(str(position)+ 'False'+'\n')
+                    f.write( '  FALSE Num Near{}'.format(len(inxs)))
                     n_false+=1
                 else:
                     res_found = ress[0]
                     if res_found.type != residue_type:
-                        f.write(str(position)+ 'False'+'\n')
                         n_false+=1
+                        f.write( '  FALSE UNCORRECT TYPE :{}'.format(res_found.type))
+
                     else:
-                        f.write(str(position)+ ' ' +res_found.id.chainId + ' ' +str(res_found.id.position) +'\n')
+                        f.write( '  TRUE ' +res_found.id.chainId + ' ' +str(res_found.id.position) )
                         n_true+=1
+                f.write('  ' + str(position)+'\n')
+            f.write('Summary Confidence  ' + str(n_true/(n_true+n_false+0.0001))+'\n')
             print('Conf', n_true/(n_true+n_false+0.0001))
+
+def test_one_label(out_pdb_file, ref_pdb_file , res_type,thr):
+    #load files
+    ref_prot = chimera.openModels.open(ref_pdb_file,'PDB')
+    out_prot = chimera.openModels.open(out_pdb_file,'PDB')[0]
+    # create -kdtree
+    res_data=[]
+    res_cg = []
+
+    for ref_model in ref_prot:
+        for res in ref_model.residues:
+            res_data.append(res)
+            res_cg.append(calcCg_of_res(res))
+
+    kdt4 = KDTree_3D_objects(res_cg,res_data)
+
+    #get all res types
+    out_residues = filter(lambda x: x.type==res_type, out_prot.residues )
+    print(res_type)
+    n_true=0
+    n_false=0
+    for res in out_residues:
+        atm = res.findAtom('K')
+        if atm.bfactor<thr:
+            continue
+        position = atm.coord()
+        inxs, ress = kdt4.in_range(position,THR_DIST)
+        if len(inxs) !=1:
+            n_false+=1
+        else:
+            res_found = ress[0]
+            if res_found.type != res_type:
+                n_false+=1
+            else:
+                n_true+=1
+    print('Conf', (n_true+0.0001)/(n_true+n_false+0.0001))
+
+
 def main():
     ref_pdb_file = '/Users/markroza/Documents/work_from_home/aanchor_server/input_files/res22/pdb5a1a.ent.txt'
     out_pdb_file = '/Users/markroza/Documents/work_from_home/aanchor_server/upload/emd2984gzpklY2019M02D11H10MMS50/results.pdb'
@@ -129,7 +163,30 @@ def main():
 
 
 
-main()
+
+
+
+if __name__ == "chimeraOpenSandbox":
+    n_command = sys.argv[3]
+    if n_command == 'test':
+        out_file = sys.argv[4]
+        ref_file = sys.argv[5]
+        results_file = sys.argv[6]
+        test_results(out_file, ref_file , out_file = results_file)
+    if n_command == 'test_one':
+
+        out_file = sys.argv[4]
+        ref_file = sys.argv[5]
+        res_type = sys.argv[6]
+        res_thr = float(sys.argv[7])
+
+        test_one_label(out_file, ref_file , res_type, res_thr)
+    runCommand('stop')
+
+
+
+
+
 
 
 
