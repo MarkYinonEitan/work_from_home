@@ -3,7 +3,7 @@
 <head>
   <title>About AAnchor</title>
   <meta name="KEYWORDS" content="cryo EM ,CNN, Amino Acids">
-  <meta name="DESCRIPTION" content="Deep Learning Analysis of High Resolution Single Particle cryo EM">
+  <meta name="DESCRIPTION" content="AAnchor: CNN guided detection of anchor amino acids in high resolution cryo EM density maps.">
   <style>
 	body {
 		<--background-image: url(bg.gif);!->
@@ -38,7 +38,7 @@
   <tbody>
     <tr>
  <td><img height=140 src="figures/logo2.png" alt="PepMatch"> <br>
- <strong><font size=2.5 color=grey>Knowledge Based Design of Protein Binding Peptides </font> </strong>
+ <strong><font size=2.5 color=grey>AAnchor: CNN guided detection of anchor amino acids in high resolution cryo EM density maps. </font> </strong>
  <br>
       <br>
 	</td>
@@ -60,38 +60,33 @@
       <td colspan="1">
 	<strong><font size=4  > About </font></strong>
 <p>
+<font size=2 >AAnchor is a Machine Learning tool for detecting amino acid within 3D image of single particle cryo Electron Microspopy recostruction of a protein molecule.
+  <p>
 <font size=2 >Atomic accuracy models of protein structures are an invaluable tool for the elucidation of protein function.
   The recent "resolution revolution"  in cryo electron microscopy (cryoEM) has led to an ever increasing number of near atomic resolution density maps deposited in the EM databank EMDB.
+  For resoltions of 3 Angstrems and better image quality enables direct detection of amino acids types from 3D cryo EM map.
+  AAnchor is a tool for prior detection of reliable  amino acid anchors in the density map, namely obtaineng a list of amino acids  identities and locations. Whilst (sometimes)  the list may contain only a  relatively small number of amino acids, those are established with high confidence.
   <p>
-<font size=2 >Background : </p>
-<p>
-<font size=2 >The recent cryo-EM resolution revolution enables  de-novo modeling of protein structures into cryo-EM density maps.
-Here we present a machine learning based method for the detection of
-high confidence anchor amino acid residues in such a map. Such anchor residues
-can be exploited in several local de-novo modeling tasks, such as the reliable positioning of secondary
-structures, loop modeling
-</p>
-<p>
-In PepMatch web-server the user can upload one PDB file of the terget protein(receptor).
-<!--In addition, we provide an option for automatic redirection of solutions from <a
-href="http://bioinfo3d.cs.tau.ac.il/PatchDock/"> PatchDock </a>
-webserver. -->
-The output is a ranked list of all the suggented inhibitory peptides of the target protein.
-</p>
-<p>
-<p>The output is a ranked list of all the suggented inhibitory peptides of the target protein.</p>
 
+
+<p>
+In AAnchor web-server the user can upload a .map or .mrc file of single particle cryo EM map (such as those obtained from EMDB ,http://www.ebi.ac.uk/pdbe/emdb/, database) and specify the map resolution.
+The output is a  list of all centers of gravity of detected amino acids.
+The output is provided in a form of PDB file, such that it can be easely viewed by existing tools for biomolecule visualization, the location of CG is marker by K atom.
+<p>
 
 <strong><font size=4 >The Algorithm: </strong> </font><p>
-PepMatch efficiently scans a library of protein-protein interfaces, and structurally aligns the target protein surface to the interface regions of both PPI partners. The interface database used is PIFACE (Cukuroglu et al., 2014), which was developed for template based protein-protein docking. The target protein alignment is done along the lines of the SnapDock (Estrin and Wolfson, 2017) Geometric Hashing scheme (Lamdan and Wolfson, 1988) based algorithm. If a good match is detected for one of the partners, a maximal length peptide (typically, 5-12 a.a. length) is extracted from the "opposite" partner across the interface. The extracted candidate peptides are flexibly re-docked and only those resulting in low energy and a highly favorable "docking funnel" are retained. The results are returned in a binding location based clusters, sorted by size.
+The heart of the algorithm is Convolution Neural Network which labels a small patch of a cryo EM map according to an amino acid type it contains.
+The input map is searched used sliding window and amino acids detected with low confidence are filtered out.
 </p>
 <p>
 </p>
-<font size=2 >Usage:  </p>
+<strong><font size=4 >Usage: </strong> </font><p>
 <font size=2 >Input:
-Receptor: 3D structure of the target protein in a pdb file format. No knowledge of the binding site is required.
+Cryo EM map: a .map or .mrc file with  3D cryo EM map of a molecule. No additional knowledge (such as sequence or homolog structure ) of the binding site is required.
+Resolution: Select the resolution range the input map fails in.
 Email: email address for results.</p>
-<font size=2 >Output: A list of candidate binding peptides, clustered by binding location.</p>
+<font size=2 >Output: A list of amino acid locations and types in form of PDB file.</p>
 </p>
 <br>
 
@@ -99,10 +94,10 @@ Email: email address for results.</p>
 
 
 </p>
-<h3>References:</h3>
+<strong><font size=4 >References: </strong> </font><p>
 
 <ol>
-<li>Maria Gorodetski and Haim J. Wolfson1 (2018) PepMatch: Knowledge Based Design of Protein Binding Peptides
+<li>Mark Rozanov and Haim J. Wolfson (2018) AAnchor: CNN guided detection of anchor amino acids in high resolution cryo EM density maps.
 </ol>
 
       <br>

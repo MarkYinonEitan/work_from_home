@@ -61,12 +61,12 @@ def get_thr_data(res):
 
     if res == "2.8":
         thr_data.append({"AA":"ASN","combination":"NE","thr":0.37})
-        thr_data.append({"AA":"ARG","combination":"NE","thr":0.65-0.65})
-        thr_data.append({"AA":"LEU","combination":"NE","thr":0.7-0.7 })
-        thr_data.append({"AA":"LYS","combination":"mean2","thr":0.45-0.15})
+        thr_data.append({"AA":"ARG","combination":"NE","thr":0.7})
+        thr_data.append({"AA":"LEU","combination":"NE","thr":0.7 })
+        thr_data.append({"AA":"LYS","combination":"mean2","thr":0.45})
         thr_data.append({"AA":"PRO","combination":"maj3","thr":0.5-0.5})
         thr_data.append({"AA":"TYR","combination":"maj3","thr":0.35-0.35})
-        thr_data.append({"AA":"VAL","combination":"NE","thr":0.38})
+        thr_data.append({"AA":"VAL","combination":"NE","thr":0.4})
 
     if res == "3.1":
         thr_data.append({"AA":"ARG","combination":"NES","thr":0.6})
