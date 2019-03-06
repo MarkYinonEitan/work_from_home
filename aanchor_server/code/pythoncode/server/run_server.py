@@ -31,9 +31,10 @@ except ImportError:
     print "RUN Without Chimera"
 
 SERVER_DIR = "/Users/markroza/Documents/GitHub/work_from_home/aanchor_server"
-# SERVER_DIR = "/specific/a/home/cc/cs/ppdock/webserver/AAnchor/"
 WORK_DIR = "/Users/markroza/Documents/work_from_home/data/aanchor_server/upload/"
-# WORK_DIR = "/specific/disk1/webservertmp/AAnchor/upload/"
+
+#SERVER_DIR = "/specific/a/home/cc/cs/ppdock/webserver/AAnchor/"
+#WORK_DIR = "/specific/disk1/webservertmp/AAnchor/upload/"
 
 
 

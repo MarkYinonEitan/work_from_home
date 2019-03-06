@@ -8,7 +8,7 @@ FOLD_NAME="res2729"
 
 CHIMERA_BIN="/Applications/Chimera.app/Contents/Resources/bin/chimera"
 
-CHIMERA_SCRIPT="/Users/markroza/Documents/GitHub/work_from_home/aanchor_server/code/pythoncode/server/create_input_file_chimera.py"
+CHIMERA_SCRIPT="/specific/a/home/cc/cs/ppdock/webserver/AAnchor/code/pythoncode/server/create_input_file_chimera.py"
 
 
 # RESOLUTION 2.8
