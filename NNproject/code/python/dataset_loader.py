@@ -1,7 +1,25 @@
 import os.path
 import numpy as np
-import tensorflow as tf
 
+try:
+  import tensorflow as tf
+except ImportError:
+  print("run without TENSORFLOW")
+
+
+VX_FILE_SUFF={'C':'_C','S':'_S','H':'_H','N':'_N','O':'_O'}
+VOX_SIZE = 2.0
+RESOLUTION = 6.0
+NBOX_IN = 9
+NBOX_OUT = 5
+N_SAMPLS_FOR_1V3 = 1.0/(2.0**3)
+N_CHANNELS = 5
+
+BATCH_SIZE = 32
+
+def getbox(mp,I,J,K,NN):
+
+    return mp[I-NN//2:I+NN//2+1,J-NN//2:J+NN//2+1,K-NN//2:K+NN//2+1,np.newaxis]
 
 class MolData():
     def __init__(self,f_names,pdb_id):
@@ -25,7 +43,7 @@ class DataPoint():
 
 class EM_DATA():
 
-    def __init__(self,folder_name, box_size = 8,train_pdbs = [], \
+    def __init__(self,folder_name, train_pdbs = [], \
                 valid_ratio=0.2, test_pdbs=[] ):
         #load data
         self.mols_train = self.load_pdb_list(folder_name, train_pdbs)
@@ -34,19 +52,28 @@ class EM_DATA():
         #create points
         self.train_points = self.points_from_mols(self.mols_train.values())
         self.test_points = self.points_from_mols(self.mols_test.values())
+        #ranomize train points
+        self.train_points =np.random.permutation(self.train_points)
+
+
+        self.N_train = len(self.train_points)
+        self.N_test = len(self.test_points)
+
+        self.N_batches = self.N_train // BATCH_SIZE
 
         self.train_generator = generator_from_data(self.train_points)
+        self.test_generator = generator_from_data(self.test_points)
+
+        self.feature_shape = [NBOX_IN  ,NBOX_IN, NBOX_IN,N_CHANNELS]
+        self.label_shape = [NBOX_OUT,NBOX_OUT,NBOX_OUT,1]
 
         self.train_dataset = tf.data.Dataset.from_generator(self.train_generator,\
-                        (tf.float64,tf.float64),(tf.TensorShape([None]),tf.TensorShape([None])))
+                        (tf.float32,tf.float32),(tf.TensorShape(self.feature_shape),tf.TensorShape(self.label_shape))).\
+                        batch(BATCH_SIZE).shuffle(buffer_size=10000)
+        self.test_dataset = tf.data.Dataset.from_generator(self.test_generator,\
+                        (tf.float32,tf.float32),(tf.TensorShape(self.feature_shape),tf.TensorShape(self.label_shape))).\
+                        batch(BATCH_SIZE).shuffle(buffer_size=10000)
         return
-
-    def gen():
-      #for i in itertools.count(1):
-        for i in range(10):
-            yield (i, np.asarray([1] * i))
-
-
 
     def load_pdb_list(self,folder_name, pdb_list):
         mols={}
@@ -70,75 +97,102 @@ class EM_DATA():
 def generator_from_data(points_data):
     def gen():
         for p in points_data:
-            feature = [p.vx_dict['C'][p.ijk[0],p.ijk[1],p.ijk[2]],\
-                        p.vx_dict['O'][p.ijk[0],p.ijk[1],p.ijk[2]],\
-                        p.vx_dict['N'][p.ijk[0],p.ijk[1],p.ijk[2]],\
-                        p.vx_dict['S'][p.ijk[0],p.ijk[1],p.ijk[2]],\
-                        p.vx_dict['H'][p.ijk[0],p.ijk[1],p.ijk[2]]]
-            label = p.out[p.ijk[0],p.ijk[1],p.ijk[2]]
+            feature = np.concatenate((getbox(p.vx_dict['C'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                        getbox(p.vx_dict['O'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                        getbox(p.vx_dict['N'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                        getbox(p.vx_dict['S'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                        getbox(p.vx_dict['H'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN)),\
+                        axis =3)
+            label = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
             yield (feature,label)
     return gen
 
 
-def get_and_check_file_names(pdb_id,folder):
+def get_file_names(pdb_id,folder):
     f_names={}
     f_names['OUT'] = folder+'/'+'F_'+pdb_id+'_output.npy'
-    f_names['C'] = folder+'/'+'F_'+pdb_id+'_C.npy'
-    f_names['N'] = folder+'/'+'F_'+pdb_id+'_N.npy'
-    f_names['O'] = folder+'/'+'F_'+pdb_id+'_O.npy'
-    f_names['S'] = folder+'/'+'F_'+pdb_id+'_S.npy'
-    f_names['H'] = folder+'/'+'F_'+pdb_id+'_H.npy'
+    for at in VX_FILE_SUFF.keys():
+        f_names[at] = folder+'/'+'F_'+pdb_id+VX_FILE_SUFF[at]+'.npy'
     f_names['LCC'] = folder+'/'+'F_'+pdb_id+'_lcc.npy'
+    return f_names
 
 
+
+def get_and_check_file_names(pdb_id,folder):
+    f_names = get_file_names(pdb_id,folder)
     for f_name in f_names.values():
         if not os.path.isfile(f_name):
             print(f_name)
             return {}
     return f_names
 
-
-fld = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/temp_data"
-fn = get_and_check_file_names('pppp',fld)
-
-
-
-sequence = np.array([[[1]],[[2],[3]],[[3],[4],[5]]])
-
-def gg():
-    n=0
-    for el in sequence:
-        n+=1
-        yield(n, np.asarray(el))
-
-gen1 = gg
-
-#for i in range(2):
-#    a = next(gen1)
-#    print(a)
+def read_list_file(list_file):
+    pairs=[]
+    with open(list_file) as fp:
+        line = fp.readline()#read header
+        line = fp.readline()
+        while line:
+            pdb_id = line[0:4]
+            emd_id = line[5:9]
+            res = float(line[10:13])
+            line = fp.readline()
+            pairs.append((pdb_id,emd_id,res))
+    return pairs
 
 
+# fld = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/temp_data"
+# fn = get_and_check_file_names('pppp',fld)
+#
+#
+#
+# sequence = np.array([[[1]],[[2],[3]],[[3],[4],[5]]])
+#
+# def gg():
+#     n=0
+#     for el in sequence:
+#         n+=1
+#         yield(n, np.asarray(el))
+#
+# gen1 = gg
+#
+# #for i in range(2):
+# #    a = next(gen1)
+# #    print(a)
+#
+#
+#
+# dt = tf.data.Dataset.from_generator(gen1,(tf.int64,tf.int64),\
+#                                            (tf.TensorShape([]),tf.TensorShape([None,1])))
+#
+# it1= dt.make_initializable_iterator()
+# el = it1.get_next()
+#
+#
+if __name__ == "__main__":
+    fld = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/single_pdbs/"
+    em1 = EM_DATA(fld,train_pdbs=['hhhh','nnnn'],test_pdbs=['oooo','cccc','ssss'])
+    train_data = em1.train_dataset.make_initializable_iterator()
+    test_data = em1.test_dataset.make_initializable_iterator()
 
-dt = tf.data.Dataset.from_generator(gen1,(tf.int64,tf.int64),\
-                                           (tf.TensorShape([]),tf.TensorShape([None,1])))
-
-it1= dt.make_initializable_iterator()
-el = it1.get_next()
-
-with tf.Session() as sess:
-    sess.run(it1.initializer)
-    print(1)
-    print(sess.run(el))
-    print(2)
-    print(sess.run(el))
-    print(3)
-    print(sess.run(el))
-    sess.run(it1.initializer)
-    print(4)
-    print(sess.run(el))
-    print(5)
-    print(sess.run(el))
-    print(6)
-    print(sess.run(el))
-
-em1 = EM_DATA(fld,box_size= 8,train_pdbs=['pppp','pppp'],test_pdbs=['pppp','pppp'])
+    trn = train_data.get_next()
+    tst = test_data.get_next()
+    with tf.Session() as sess:
+        sess.run(train_data.initializer)
+        sess.run(test_data.initializer)
+        for k in range(10):
+            print('TRAIN')
+            x,y = sess.run(trn)
+            print(np.sign(x))
+            print('TEST')
+            print(sess.run(tst))
+#     print(2)
+#     print(sess.run(el))
+#     print(3)
+#     print(sess.run(el))
+#     sess.run(it1.initializer)
+#     print(4)
+#     print(sess.run(el))
+#     print(5)
+#     print(sess.run(el))
+#     print(6)
+#     print(sess.run(el))
