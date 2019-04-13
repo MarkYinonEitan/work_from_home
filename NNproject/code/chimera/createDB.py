@@ -108,7 +108,6 @@ def calc_voxalization_by_atom_type(pdb_id,grid3D,res=RESOLUTION):
         runCommand('delete #{}:@/element!={}'.format(Id_for_copy,at_name))
         ## run molmap
         no_atoms = get_object_by_id(Id_for_copy)==-1
-        
 
 
         if no_atoms:
