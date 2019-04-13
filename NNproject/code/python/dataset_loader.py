@@ -12,10 +12,28 @@ VOX_SIZE = 2.0
 RESOLUTION = 6.0
 NBOX_IN = 9
 NBOX_OUT = 5
-N_SAMPLS_FOR_1V3 = 1.0/(2.0**3)
+N_SAMPLS_FOR_1V3 = 1.0/(5.0**3)
 N_CHANNELS = 5
 
-BATCH_SIZE = 32
+BATCH_SIZE = 256
+
+
+class TestBox():
+    def __init__(self, p):
+        feature = np.concatenate((getbox(p.vx_dict['C'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                    getbox(p.vx_dict['O'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                    getbox(p.vx_dict['N'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                    getbox(p.vx_dict['S'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                    getbox(p.vx_dict['H'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN)),\
+                    axis =3)
+        label = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
+
+        self.pdb_id  = pdb_id
+        self.coords = p.ijk
+        self.inputs = feature
+        self.out = None
+        self.target = label
+        return
 
 def getbox(mp,I,J,K,NN):
 
@@ -35,52 +53,48 @@ class MolData():
         self.pdb_id = pdb_id
 
 class DataPoint():
-    def __init__(self,x,y,z,map,vx_dict):
+    def __init__(self,x,y,z,map,vx_dict,pdb_id):
         self.ijk = (x,y,z)
         self.out = map
         self.vx_dict = vx_dict
+        self.pdb_id = pdb_id
 
+class EM_DATA_DISC_RANDOM():
 
-class EM_DATA():
-
-    def __init__(self,folder_name, train_pdbs = [], \
-                valid_ratio=0.2, test_pdbs=[] ):
+    def __init__(self,folder_name, train_pdbs = []):
         #load data
         self.mols_train = self.load_pdb_list(folder_name, train_pdbs)
-        self.mols_test = self.load_pdb_list(folder_name, test_pdbs)
 
         #create points
         self.train_points = self.points_from_mols(self.mols_train.values())
-        self.test_points = self.points_from_mols(self.mols_test.values())
         #ranomize train points
         self.train_points =np.random.permutation(self.train_points)
 
 
         self.N_train = len(self.train_points)
-        self.N_test = len(self.test_points)
 
         self.N_batches = self.N_train // BATCH_SIZE
 
-        self.train_generator = generator_from_data(self.train_points)
-        self.test_generator = generator_from_data(self.test_points)
+        self.train_generator = generator_from_data_random(self.train_points)
 
-        self.feature_shape = [NBOX_IN  ,NBOX_IN, NBOX_IN,N_CHANNELS]
-        self.label_shape = [NBOX_OUT,NBOX_OUT,NBOX_OUT,1]
+        self.feature_shape = [NBOX_OUT  ,NBOX_OUT, NBOX_OUT,1]
+        self.label_shape = [1,1,1,1]
 
         self.train_dataset = tf.data.Dataset.from_generator(self.train_generator,\
                         (tf.float32,tf.float32),(tf.TensorShape(self.feature_shape),tf.TensorShape(self.label_shape))).\
-                        batch(BATCH_SIZE).shuffle(buffer_size=10000)
-        self.test_dataset = tf.data.Dataset.from_generator(self.test_generator,\
-                        (tf.float32,tf.float32),(tf.TensorShape(self.feature_shape),tf.TensorShape(self.label_shape))).\
-                        batch(BATCH_SIZE).shuffle(buffer_size=10000)
+                        batch(BATCH_SIZE).shuffle(buffer_size=100)
         return
 
     def load_pdb_list(self,folder_name, pdb_list):
         mols={}
         for pdb_id in pdb_list:
-            pdb_files = get_and_check_file_names(pdb_id,folder_name)
-            mol_data = MolData(pdb_files,pdb_id)
-            mols[pdb_id] = mol_data
+            try:
+                pdb_files = get_and_check_file_names(pdb_id,folder_name)
+                mol_data = MolData(pdb_files,pdb_id)
+                mols[pdb_id] = mol_data
+                print("{} Loaded".format(pdb_id))
+            except Exception as e:
+                print("{} FAILED, Error : ".format(pdb_id, str(e)))
         return mols
 
     def points_from_mols(self,mols):
@@ -89,7 +103,72 @@ class EM_DATA():
             all_coords = np.nonzero(ml.lcc)
             for i,j in enumerate(all_coords[0]):
                 points.append(DataPoint(all_coords[0][i],all_coords[1][i],all_coords[2][i]\
-                ,ml.out,ml.vx))
+                , ml.out, ml.vx, ml.pdb_id))
+        return points
+
+def generator_from_data_random(points_data):
+    def gen():
+        for p in points_data:
+            label = np.random.choice([0,1])*np.ones([1,1,1,1])
+            if label[0][0][0][0] >0:
+                map_patch = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
+            else:
+                map_patch = np.random.randn(NBOX_OUT,NBOX_OUT,NBOX_OUT,1)
+
+            std = np.std(map_patch)
+            avg = np.mean(map_patch)
+            map_patch = (map_patch-avg)/std
+
+            yield (map_patch,label)
+    return gen
+
+
+class EM_DATA():
+
+    def __init__(self,folder_name, train_pdbs = [],is_random = True):
+        #load data
+        self.mols_train = self.load_pdb_list(folder_name, train_pdbs)
+
+        #create points
+        self.train_points = self.points_from_mols(self.mols_train.values())
+        #ranomize train points
+        if is_random:
+            self.train_points =np.random.permutation(self.train_points)
+
+
+        self.N_train = len(self.train_points)
+
+        self.N_batches = self.N_train // BATCH_SIZE
+
+        self.train_generator = generator_from_data(self.train_points)
+
+        self.feature_shape = [NBOX_IN  ,NBOX_IN, NBOX_IN,N_CHANNELS]
+        self.label_shape = [NBOX_OUT,NBOX_OUT,NBOX_OUT,1]
+
+        self.train_dataset = tf.data.Dataset.from_generator(self.train_generator,\
+                        (tf.float32,tf.float32),(tf.TensorShape(self.feature_shape),tf.TensorShape(self.label_shape))).\
+                        batch(BATCH_SIZE).shuffle(buffer_size=100)
+        return
+
+    def load_pdb_list(self,folder_name, pdb_list):
+        mols={}
+        for pdb_id in pdb_list:
+            try:
+                pdb_files = get_and_check_file_names(pdb_id,folder_name)
+                mol_data = MolData(pdb_files,pdb_id)
+                mols[pdb_id] = mol_data
+                print("{} Loaded".format(pdb_id))
+            except Exception as e:
+                print("{} FAILED, Error : ".format(pdb_id, str(e)))
+        return mols
+
+    def points_from_mols(self,mols):
+        points=[]
+        for ml in mols:
+            all_coords = np.nonzero(ml.lcc)
+            for i,j in enumerate(all_coords[0]):
+                points.append(DataPoint(all_coords[0][i],all_coords[1][i],all_coords[2][i]\
+                , ml.out, ml.vx, ml.pdb_id))
         return points
 
 
@@ -104,8 +183,27 @@ def generator_from_data(points_data):
                         getbox(p.vx_dict['H'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN)),\
                         axis =3)
             label = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
+            std = np.std(label)
+            avg = np.mean(label)
+            label = (label  -avg)/std
+
             yield (feature,label)
     return gen
+
+def generator_from_data_test(points_data):
+    def gen():
+        for num_point,p in enumerate(points_data):
+            feature = np.concatenate((getbox(p.vx_dict['C'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                        getbox(p.vx_dict['O'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                        getbox(p.vx_dict['N'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                        getbox(p.vx_dict['S'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                        getbox(p.vx_dict['H'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN)),\
+                        axis =3)
+            label = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
+            print("DEBUG 235")
+            yield (feature,label)
+    return gen
+
 
 
 def get_file_names(pdb_id,folder):
