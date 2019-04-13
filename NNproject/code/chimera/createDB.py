@@ -1,8 +1,11 @@
 from chimera import runCommand
+import chimera
 from MarkChimeraUtils import atomsList2spec
 import VolumeViewer
 import glob
 import numpy as np
+import os, sys
+import time
 
 #get current directory
 if '__file__' in locals():
@@ -106,8 +109,9 @@ def calc_voxalization_by_atom_type(pdb_id,grid3D,res=RESOLUTION):
         ## run molmap
         no_atoms = get_object_by_id(Id_for_copy)==-1
         
-        
-        if no_atoms:           
+
+
+        if no_atoms:
             runCommand('vop new zero_map origin {},{},{} modelId {}'.\
                        format(np.mean(grid3D[0]),np.mean(grid3D[1]),np.mean(grid3D[1]),Id_for_molmap))
         else:
@@ -135,9 +139,8 @@ def calc_3D_grid(pdb_id,vx_size,res):
 
     syth_map_id = 6001
     #molmap
-    runCommand('molmap #{} {} gridSpacing {} modelId {}'\
+    runCommand('molmap #{} {} gridSpacing {} modelId {} replace false '\
                .format(pdb_id,res,vx_size,syth_map_id))
-
     #extract grid
     v_obj = get_object_by_id(syth_map_id)
 
@@ -168,7 +171,7 @@ def calc_all_matrices(pdb_file, map_file,vx_size = VOX_SIZE, res = RESOLUTION):
     map_id = map_obj.id
 
     #add hydrogens
-    runCommand('addh spec #{}'.format(pdb_id)) 
+    runCommand('addh spec #{}'.format(pdb_id))
 
     Xs,Ys,Zs = calc_3D_grid(pdb_id,vx_size,res)
 
@@ -202,20 +205,20 @@ def create_database(input_folder, output_folder, list_file):
         inp_mtrc, output_mtrx, local_fit_matrix = calc_all_matrices(pdb_file, map_file,vx_size = VOX_SIZE, res = RESOLUTION)
         #save data to folder
         save_matrc_to_folder(output_folder,pdb_id,inp_mtrc, output_mtrx, local_fit_matrix)
-    
-    
 
 
 
 
-runCommand('close all')
-#pdb_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/6j2c.cif"
-#map_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/emd-2984.map"
-pdb_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/test1.pdb"
-map_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/t1.mrc"
-#
-list_file = '/Users/markroza/Documents/work_from_home/NNcourse_project/data/res6/synth/list.txt'
-input_folder = '/Users/markroza/Documents/work_from_home/NNcourse_project/data/res6/synth/'
-output_folder = input_folder
-pp = read_list_file(list_file)
-create_database(input_folder, output_folder, list_file)
+
+if __name__=='main':
+    runCommand('close all')
+    #pdb_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/6j2c.cif"
+    #map_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/emd-2984.map"
+    pdb_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/test1.pdb"
+    map_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/t1.mrc"
+    #
+    list_file = '/Users/markroza/Documents/work_from_home/NNcourse_project/data/res6/synth/list.txt'
+    input_folder = '/Users/markroza/Documents/work_from_home/NNcourse_project/data/res6/synth/'
+    output_folder = input_folder
+    pp = read_list_file(list_file)
+    create_database(input_folder, output_folder, list_file)
