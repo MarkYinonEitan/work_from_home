@@ -12,7 +12,7 @@ sys.path.append(python_path)
 import dataset_loader
 from dataset_loader import read_list_file, get_file_names,VX_FILE_SUFF
 from dataset_loader import VOX_SIZE, RESOLUTION, N_SAMPLS_FOR_1V3
-from dataset_loader import N_CHANNELS, BATCH_SIZE,NBOX_OUT
+from dataset_loader import N_CHANNELS, BATCH_SIZE,NBOX_OUT, NBOX_IN
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -30,6 +30,55 @@ Output_Cube_Size = 5
 Nchannels = 4
 
 root="./test1/"
+
+class DISC_V1():
+    def __init__(self):
+
+        x = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_OUT, NBOX_OUT, NBOX_OUT ,1])
+        x_label = tf.placeholder(tf.float32, shape = [BATCH_SIZE,1,1,1,1])
+        keep_prob = tf.placeholder(dtype=tf.float32)
+        isTrain = tf.placeholder(dtype=tf.bool)
+        # inputs
+        self.x = x
+        self.x_label = x_label
+        self.keep_prob = keep_prob
+        self.isTrain = isTrain
+
+        #networks
+        self.disc = discriminator(x, isTrain )
+        self.disc_loss = disc_loss(self.disc, x_label)
+
+        T_vars = tf.trainable_variables()
+        D_vars = [var for var in T_vars if var.name.startswith('discriminator')]
+        self.T_vars = T_vars
+        self.D_vars = D_vars
+        clip = [p.assign(tf.clip_by_value(p, -0.5, 0.5)) for p in D_vars]
+        self.clip = clip
+
+        # optimizer for each network
+        with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+            D_optim = tf.train.RMSPropOptimizer(D_lr).minimize(self.disc_loss["loss"], var_list=D_vars)
+            self.D_optim = D_optim
+
+
+
+def disc_loss(disc, x_label):
+
+    th = 0.5
+    disc_loss = {}
+    x = disc["o"]
+    y = x_label
+
+
+    correct_pred = tf.equal(tf.round(x), y)
+    accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+
+    err = tf.add(tf.math.multiply(1-x,y),tf.math.multiply(x,1-y))
+    loss = tf.math.reduce_mean(err)
+
+    disc_loss["loss"] = tf.losses.hinge_loss(x,y)
+    disc_loss["acc"] = accuracy
+    return disc_loss
 
 
 def lrelu(x, th=0.2):
@@ -151,9 +200,9 @@ def discriminator(x, isTrain=True):
         dsc["out3shape"] = [BATCH_SIZE,2,2,2,512]
 
         # output layer
-        conv4 = tf.layers.conv3d(lrelu3, 2, [2, 2, 2], strides=(2, 2, 2), padding='valid', use_bias=False, kernel_initializer=tf.contrib.layers.xavier_initializer())
+        conv4 = tf.layers.conv3d(lrelu3, 1, [2, 2, 2], strides=(2, 2, 2), padding='valid', use_bias=False, kernel_initializer=tf.contrib.layers.xavier_initializer())
         dsc["c4"] = conv4
-        dsc["out4shape"] = [BATCH_SIZE,2,2,2,512]
+        dsc["out4shape"] = [BATCH_SIZE,2,2,2,1]
 
 
         o = tf.nn.sigmoid(conv4)
@@ -204,7 +253,7 @@ def get_net_graph(xx,yy,keep_prob,isTrain):
 
     #D_fake, D_fake_logits = discriminator(G_z, isTrain)
 
-    reconstruction_loss = tf.reduce_sum(tf.squared_difference(tf.reshape(G_z, (BATCH_SIZE, NBOX_OUT**3)), tf.reshape(x_3D, (BATCH_SIZE, NBOX_OUT**3))),1)
+    reconstruction_loss = tf.reduce_sum(tf.squared_difference(tf.reshape(G_z, (BATCH_SIZE, NBOX_OUT**3)), tf.reshape(x_3D, (BATCH_SIZE, NBOX_OUT**3))),1)/NBOX_OUT**3
     net_graph["R_L"] = reconstruction_loss
 
     KL_divergence = -0.5 * tf.reduce_sum(1.0 + 2.0 * z_sig - z_mu ** 2 - tf.exp(2.0 * z_sig), 1)
@@ -226,10 +275,6 @@ def get_net_graph(xx,yy,keep_prob,isTrain):
 
     net_graph["D_loss" ]=D_loss
     net_graph["G_loss" ]=G_loss
-
-
-    tf.summary.scalar('D_loss', D_loss)
-    tf.summary.scalar('G_loss', G_loss)
 
     # trainable variables for each network
     T_vars = tf.trainable_variables()
@@ -254,12 +299,6 @@ def get_net_graph(xx,yy,keep_prob,isTrain):
     net_graph["D_optim"] = D_optim
     net_graph["G_optim"] = G_optim
     net_graph["E_optim"] = E_optim
-
-
-
-    tf.summary.scalar('D_loss', D_loss)
-    tf.summary.scalar('G_loss', G_loss)
-
 
 
     return net_graph
@@ -289,8 +328,6 @@ if __name__ == "__main__":
     G_loss = -tf.reduce_mean(D_fake_logits)
     # sub_loss = G_loss + VAE_loss
 
-    tf.summary.scalar('D_loss', D_loss)
-    tf.summary.scalar('G_loss', G_loss)
 
     # trainable variables for each network
     T_vars = tf.trainable_variables()

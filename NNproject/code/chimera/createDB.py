@@ -1,3 +1,4 @@
+import chimera
 from chimera import runCommand
 import chimera
 from MarkChimeraUtils import atomsList2spec

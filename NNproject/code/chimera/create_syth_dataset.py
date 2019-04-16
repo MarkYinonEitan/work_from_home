@@ -1,7 +1,7 @@
 import chimera
 from chimera import runCommand
 import glob
-
+import numpy as np
 
 
 
@@ -14,6 +14,7 @@ def create_data_set(db_folder, min_res, max_res, list_file = "list.txt"):
 list_file = "list.txt"
 
 db_folder = '/Users/markroza/Documents/work_from_home/NNcourse_project/data/res6/synth/'
+db_folder = '/specific/netapp5_2/iscb/wolfson/Mark/data/NNcourse_project/data/res6/synth/'
 
 min_res = 5.25
 max_res = 6.25
@@ -50,13 +51,3 @@ for pdb_file in pdb_files:
     runCommand('volume #{} save {}'.format(synth_map_id,db_folder+'emd-'+str(map_num)+'.mrc'))
     with open(list_file,"a") as f_list:
         f_list.write('{} {} {}\n'.format(pdb_code,map_num,res))
-
-
-               
-
-
-
-    
-
-
-
