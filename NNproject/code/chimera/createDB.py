@@ -208,19 +208,25 @@ def create_database(input_folder, output_folder, list_file):
 
 
 
+def create_synth_data_res6():
+    base_data_folder = "/specific/netapp5_2/iscb/wolfson/Mark/data/NNcourse_project/data/"
+    list_file = base_data_folder + '/res6/synth/list.txt'
+    input_folder = base_data_folder + '/res6/synth/'
+    output_folder = input_folder
+    pp = read_list_file(list_file)
+    create_database(input_folder, output_folder, list_file)
+    return
+
+def create_real_data_res6():
+    base_data_folder = "/specific/netapp5_2/iscb/wolfson/Mark/data/NNcourse_project/data/"
+    list_file = base_data_folder + '/res6/exp/list.txt'
+    input_folder = base_data_folder + '/res6/exp/'
+    output_folder = input_folder
+    pp = read_list_file(list_file)
+    create_database(input_folder, output_folder, list_file)
+    return
 
 
-
-runCommand('close all')
-#pdb_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/6j2c.cif"
-#map_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/emd-2984.map"
-pdb_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/test1.pdb"
-map_file = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/t1.mrc"
-#
-base_data_folder = "/specific/netapp5_2/iscb/wolfson/Mark/data/NNcourse_project/data/"
-
-list_file = base_data_folder + '/res6/synth/list.txt'
-input_folder = base_data_folder + '/res6/synth/'
-output_folder = input_folder
-pp = read_list_file(list_file)
-create_database(input_folder, output_folder, list_file)
+####
+#create_synth_data_res6()
+create_real_data_res6()
