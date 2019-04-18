@@ -113,6 +113,22 @@ def generator_from_data_random(points_data):
             yield (map_patch,label)
     return gen
 
+def get_out_map(p):
+    map_patch = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
+    std = np.std(map_patch)
+    avg = np.mean(map_patch)
+    map_patch = (map_patch-avg)/std
+    return map_patch
+
+def get_real_synth(p):
+    if p.is_real:
+        label = np.ones([1,1,1,1])
+    else:
+        label = np.zeros([1,1,1,1])
+    return label
+
+
+
 
 def generator_from_data_real_synth(points_data):
     def gen():
