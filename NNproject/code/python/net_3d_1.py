@@ -45,7 +45,7 @@ class DISC_V1():
         self.isTrain = isTrain
 
         #networks
-        self.disc = discriminator(x, isTrain )
+        self.disc = disc_v0(x, isTrain )
         self.disc_loss = disc_loss(self.disc, x_label)
 
         T_vars = tf.trainable_variables()
@@ -57,28 +57,29 @@ class DISC_V1():
 
         # optimizer for each network
         with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            D_optim = tf.train.RMSPropOptimizer(D_lr).minimize(self.disc_loss["loss"], var_list=D_vars)
+            D_optim = tf.train.RMSPropOptimizer(1).minimize(self.disc_loss["loss"], var_list=D_vars)
             self.D_optim = D_optim
 
 
 
 def disc_loss(disc, x_label):
 
-    th = 0.5
-    disc_loss = {}
-    x = disc["o"]
-    y = x_label
+    x = tf.squeeze(disc["o"])
+    y = tf.squeeze(x_label)
+    y_h = tf.one_hot(tf.to_int32(y),2)
 
 
-    correct_pred = tf.equal(tf.round(x), y)
-    accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+    pred = tf.argmax(x)
+    #accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
-    err = tf.add(tf.math.multiply(1-x,y),tf.math.multiply(x,1-y))
-    loss = tf.math.reduce_mean(err)
 
-    disc_loss["loss"] = tf.losses.hinge_loss(x,y)
-    disc_loss["acc"] = accuracy
-    return disc_loss
+    lgts = x;
+    d_loss = {}
+    d_loss["loss"] = tf.losses.sigmoid_cross_entropy(multi_class_labels=y_h,logits=lgts)
+    d_loss["acc"] = d_loss["loss"]
+    d_loss["x"] = x
+    d_loss["y"] = y
+    return d_loss
 
 
 def lrelu(x, th=0.2):
@@ -174,6 +175,19 @@ def generator(x, isTrain=True):
 
         return gnr
 
+def disc_v0(x,isTrain = True):
+    with tf.variable_scope('discriminator', reuse=tf.AUTO_REUSE):  # (-1, 32, 32,, 32, 1)
+        x_f = tf.layers.Flatten()(x)
+        dsc={}
+
+
+        l1 = tf.contrib.layers.fully_connected(x_f, 2)
+        o = tf.math.sigmoid(l1)
+        dsc["o"] = o
+        dsc["logits"] = o
+
+        return dsc
+
 
 def discriminator(x, isTrain=True):
     with tf.variable_scope('discriminator', reuse=tf.AUTO_REUSE):  # (-1, 32, 32,, 32, 1)
@@ -183,14 +197,14 @@ def discriminator(x, isTrain=True):
         lrelu1 = tf.nn.elu(conv1)
         dsc["c1"] = conv1
         dsc["l1"] = lrelu1
-        dsc["out1shape"] = [BATCH_SIZE,5,5,5,128]
+        dsc["out1shape"] = [BATCH_SIZE,5,5,5,12]
 
         # 2nd hidden layer
         conv2 = tf.layers.conv3d(lrelu1, 256, [3, 3,3], strides=(1, 1, 1), padding='valid', use_bias=False, kernel_initializer=tf.contrib.layers.xavier_initializer())  # (-1, 8, 8, 8, 256)
         lrelu2 = tf.nn.elu(tf.layers.batch_normalization(conv2, training=isTrain))
         dsc["c2"] = conv2
         dsc["l2"] = lrelu2
-        dsc["out2shape"] = [BATCH_SIZE,3,3,3,256]
+        dsc["out2shape"] = [BATCH_SIZE,3,3,3,25]
 
         # 3rd hidden layer
         conv3 = tf.layers.conv3d(lrelu2, 512, [2, 2, 2], strides=(1, 1, 1), padding='valid', use_bias=False, kernel_initializer=tf.contrib.layers.xavier_initializer())  # (-1, 4, 4, 4, 512)
@@ -205,7 +219,7 @@ def discriminator(x, isTrain=True):
         dsc["out4shape"] = [BATCH_SIZE,2,2,2,1]
 
 
-        o = tf.nn.sigmoid(conv4)
+        o = tf.nn.relu(conv4)
         dsc["o"] = o
         dsc["logits"] = conv4
 

@@ -1,5 +1,6 @@
 from tensorflow.python.client import device_lib
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 def get_available_gpus():
     local_device_protos = device_lib.list_local_devices()
@@ -14,3 +15,6 @@ def run_to_check_if_usign_gpu(sess1):
     # Runs the op.
     print(sess1.run(c))
     return
+
+
+#def display_point(p):
