@@ -1,0 +1,1 @@
+source /Users/markroza/Documents/work_from_home/NNcourse_project/v_env_p37/bin/activate
