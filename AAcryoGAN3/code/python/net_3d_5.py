@@ -14,7 +14,6 @@ else:
 python_path = dir_path
 sys.path.append(python_path)
 import dataset_loader
-from dataset_loader import read_list_file, get_file_names,VX_FILE_SUFF
 from dataset_loader import VOX_SIZE, RESOLUTION, N_SAMPLS_FOR_1V3
 from dataset_loader import N_CHANNELS, BATCH_SIZE,NBOX_OUT, NBOX_IN
 

@@ -20,9 +20,8 @@ reload(dataset_loader)
 from dataset_loader import read_list_file, get_file_names,VX_FILE_SUFF
 from dataset_loader import VOX_SIZE, RESOLUTION, NBOX_IN, N_SAMPLS_FOR_1V3
 
-base_data_folder = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/"
-
-
+#base_data_folder = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/"
+base_data_folder = "//specific/netapp5_2/iscb/wolfson/Mark/data/AAcryoGaN3/"
 
 def read_list_file_old(list_file):
     emdcodes=[]
@@ -219,10 +218,10 @@ def create_synth_data_res6():
     create_database(input_folder, output_folder, list_file)
     return
 
-def create_real_data_res6():
-    list_file = base_data_folder + '/res6/exp/list.txt'
-    input_folder = base_data_folder + '/res6/exp/'
-    output_folder = input_folder
+def create_real_data_res3():
+    list_file = base_data_folder + '/list_3A.txt'
+    input_folder = base_data_folder + '/res2931/'
+    output_folder = base_data_folder + '/vx_data/'
     pp = read_list_file(list_file)
     create_database(input_folder, output_folder, list_file)
     return
@@ -230,4 +229,4 @@ def create_real_data_res6():
 
 ####
 #create_synth_data_res6()
-create_real_data_res6()
+create_real_data_res3()

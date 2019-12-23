@@ -23,7 +23,7 @@ from dataset_loader import EM_DATA_REAL_SYTH, EM_DATA,EM_DATA_DISC_RANDOM
 from dataset_loader import BATCH_SIZE, NBOX_IN,NBOX_OUT,N_CHANNELS
 from dataset_loader import getbox
 import net_3d_5
-import utils
+import utils, utils_project
 from utils import get_available_gpus
 
 
@@ -40,132 +40,157 @@ data_fld = base_data_folder + "/res6/synth_exp/"
 out_fld = base_data_folder + "/results/vaegan_res6/"
 
 
-model_path = out_fld+'/network_test/'
-graph_folder = out_fld+'/graphs/'
-test_res_folder = out_fld + '/tests/'
-
-if os.path.isdir(out_fld):
-    shutil.rmtree(out_fld, ignore_errors=True)
-
-os.mkdir(out_fld)
-os.mkdir(model_path)
-os.mkdir(graph_folder)
-os.mkdir(test_res_folder)
-
-real_train_pdbs = ['5fik']#,'5a31','5l9t','6n88']
-real_test_pdbs = ['5fik']
-
-real_data = EM_DATA(data_fld,train_pdbs = real_train_pdbs, is_random = True)
-real_iter = real_data.train_dataset.make_initializable_iterator()
-real_pair = real_iter.get_next()
-
-real_data_t = EM_DATA(data_fld,train_pdbs = real_test_pdbs, is_random = True)
-real_iter_t = real_data_t.train_dataset.make_initializable_iterator()
-real_pair_t = real_iter_t.get_next()
-
-#tf.reset_default_graph()
-nn = net_3d_5.VAE_GAN1()
 
 
-
-# open session and initialize all variables
-config = tf.ConfigProto(log_device_placement=False)
-config.gpu_options.allow_growth = True
-
-with tf.Session(config=config) as sess:
-    #sess = tf.InteractiveSession()
-    tf.global_variables_initializer().run()
+def get_data_for_train( vx_fold = None,list_file = None):
 
 
-    saver = tf.train.Saver(max_to_keep=2000)
+    pdb_emd_pairs = utils_project.read_list_file(list_file)
+    in_train  = list(filter(lambda x: pdb_emd_pairs[x][3] == "TRAIN", range(len(pdb_emd_pairs))))
+    real_train_pdbs = [pdb_emd_pairs[x][0] for x in in_train]
+    print("DEBUG 2354",real_train_pdbs)
+
+    in_test  = list(filter(lambda x: pdb_emd_pairs[x][3] == "TEST", range(len(pdb_emd_pairs))))
+    real_test_pdbs = [pdb_emd_pairs[x][0] for x in in_test]
+
+    real_data_train = EM_DATA(vx_fold,train_pdbs = real_train_pdbs, is_random = True)
+
+    real_data_test = EM_DATA(vx_fold,train_pdbs = real_test_pdbs, is_random = True)
+
+    return real_data_train, real_data_test
+
+def set_out_folders(out_fld = None):
+        ## organize folders
+        model_path = out_fld+'/network_test/'
+        graph_folder = out_fld+'/graphs/'
+        test_res_folder = out_fld + '/tests/'
+        if os.path.isdir(out_fld):
+            shutil.rmtree(out_fld, ignore_errors=True)
+
+        os.mkdir(out_fld)
+        os.mkdir(model_path)
+        os.mkdir(graph_folder)
+        os.mkdir(test_res_folder)
+
+        return model_path, graph_folder, test_res_folder
+
+def run_training(real_data_train,real_data_test, net_string = 'None',out_fld = None):
+
+    model_path, graph_folder, test_res_folder = set_out_folders(out_fld = out_fld)
+
+    #tf.reset_default_graph()
+    nn = utils_project.get_net_by_string(net_string)
+
+    real_iter_train = real_data_train.train_dataset.make_initializable_iterator()
+    real_pair_train = real_iter_train.get_next()
+
+    real_iter_test = real_data_test.train_dataset.make_initializable_iterator()
+    real_pair_test = real_iter_test.get_next()
 
 
-    time_start = timer()
-    sess.run(real_iter.initializer)
-    sess.run(real_iter_t.initializer)
-    # training-loop
+    # open session and initialize all variables
+    config = tf.ConfigProto(log_device_placement=False)
+    config.gpu_options.allow_growth = True
 
-    loss_disc_real =  tf.Variable(0.0)
-    loss_disc_fake =  tf.Variable(0.0)
-    disc_acc =  tf.Variable(0.0)
-    encode_loss =  tf.Variable(0.0)
-    RC_loss =  tf.Variable(0.0)
+    with tf.Session(config=config) as sess:
+        #sess = tf.InteractiveSession()
+        tf.global_variables_initializer().run()
 
 
-    tf.summary.scalar("loss_disc_real", loss_disc_real)
-    tf.summary.scalar("loss_disc_fake", loss_disc_fake)
-    tf.summary.scalar("disc_acc", disc_acc)
-    tf.summary.scalar("encode_loss", encode_loss)
-    tf.summary.scalar("RC_loss", RC_loss)
+        saver = tf.train.Saver(max_to_keep=2000)
 
-    write_op = tf.summary.merge_all()
 
-    writer_train = tf.summary.FileWriter(graph_folder+'/train/')
-    writer_test = tf.summary.FileWriter(graph_folder+'/test/')
+        time_start = timer()
+        sess.run(real_iter_test.initializer)
+        sess.run(real_iter_train.initializer)
+        # training-loop
 
-    n=0
-    Disc_Acc = 1
-    for batch in range(1000000):
-            if n > real_data.N_batches-2:
-                sess.run(real_iter.initializer)
-                sess.run(real_iter_t.initializer)
-                n=0
-            n=n+1
+        loss_disc_real =  tf.Variable(0.0)
+        loss_disc_fake =  tf.Variable(0.0)
+        disc_acc =  tf.Variable(0.0)
+        encode_loss =  tf.Variable(0.0)
+        RC_loss =  tf.Variable(0.0)
 
-            vx_real ,mp_real= sess.run(real_pair)
-            fd ={nn.vx_real: vx_real, nn.mp_real: mp_real}
 
-            if Disc_Acc<0.8:
-                sess.run(nn.opti_D, feed_dict=fd)
-            # optimization GAN
-            sess.run(nn.opti_EC   , feed_dict=fd)
+        tf.summary.scalar("loss_disc_real", loss_disc_real)
+        tf.summary.scalar("loss_disc_fake", loss_disc_fake)
+        tf.summary.scalar("disc_acc", disc_acc)
+        tf.summary.scalar("encode_loss", encode_loss)
+        tf.summary.scalar("RC_loss", RC_loss)
 
-            Disc_Acc = sess.run(nn.Disc_Acc, feed_dict=fd)
+        write_op = tf.summary.merge_all()
 
-            #update
-            extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            sess.run(extra_update_ops)
+        writer_train = tf.summary.FileWriter(graph_folder+'/train/')
+        writer_test = tf.summary.FileWriter(graph_folder+'/test/')
 
-            #Learrate
-            new_learn_rate = sess.run(nn.new_learning_rate)
-            if new_learn_rate > 0.00005:
-                sess.run(nn.add_global)
-            if batch %1 == 0:
-                D_Real, D_Fake, L_tot,Disc_Acc,Enc_loss, reconstr_loss= sess.run([nn.D_loss_real,nn.D_loss_fake,nn.VAE_GAN_loss, nn.Disc_Acc, nn.encode_loss, nn.reconstr_loss],feed_dict=fd)
-                print("D_Real {:04.2f}  D_Fake {:04.2f} L_tot {:04.2f},Disc_Acc {:04.2f} Enc_loss {:04.2f} reconstr_loss {:04.2f} ".format(D_Real, D_Fake,L_tot, Disc_Acc,Enc_loss, reconstr_loss))
-            if batch %1 == 0:
-                # #SAVE  TRAIN DATA
-                fd = {loss_disc_real: D_Real,\
-                loss_disc_fake: D_Fake,\
-                disc_acc: Disc_Acc,\
-                RC_loss: reconstr_loss,\
-                encode_loss: Enc_loss}
+        n=0
+        Disc_Acc = 1
+        for batch in range(1000000):
+                if n > real_data_train.N_batches-2:
+                    sess.run(real_iter_train.initializer)
+                    sess.run(real_iter_test.initializer)
+                    n=0
+                n=n+1
 
-                summary = sess.run(write_op,feed_dict = fd)
-                writer_train.add_summary(summary, batch)
-                writer_train.flush()
-                # #SAVE  TEST DATA
-                vx_real ,mp_real= sess.run(real_pair_t)
+                vx_real ,mp_real= sess.run(real_pair_train)
                 fd ={nn.vx_real: vx_real, nn.mp_real: mp_real}
-                D_Real, D_Fake, L_tot,Disc_Acc,Enc_loss, reconstr_loss= sess.run([nn.D_loss_real,nn.D_loss_fake,nn.VAE_GAN_loss, nn.Disc_Acc, nn.encode_loss, nn.reconstr_loss],feed_dict=fd)
-                print("TEST")
-                print("D_Real {:04.2f}  D_Fake {:04.2f} L_tot {:04.2f},Disc_Acc {:04.2f} Enc_loss {:04.2f} reconstr_loss {:04.2f} ".format(D_Real, D_Fake,L_tot, Disc_Acc,Enc_loss, reconstr_loss))
-                #
-                #SAVE  TEST DATA
-                fd = {loss_disc_real: D_Real,\
-                loss_disc_fake: D_Fake,\
-                disc_acc: Disc_Acc,\
-                RC_loss: reconstr_loss,\
-                encode_loss: Enc_loss}
-                summary = sess.run(write_op,feed_dict = fd)
-                writer_test.add_summary(summary, batch)
-                writer_test.flush()
-                #
 
-                saved_path = saver.save(sess, model_path + str(batch) + ".ckpt")
-                saver.restore(sess,model_path + str(batch) + ".ckpt")
-                print("Model Saved")
-#                map_gen = sess.run(nn.mp_fake,feed_dict=fd)
-#                res = {"inp":vx_real,"mp_real":mp_real,"mp_gen":map_gen}
-#                with  open(test_res_folder + str(batch) + ".pkl", 'wb') as out_file:
-#                    pickle.dump(res, out_file)
+                if Disc_Acc<0.8:
+                    sess.run(nn.opti_D, feed_dict=fd)
+                # optimization GAN
+                sess.run(nn.opti_EC   , feed_dict=fd)
+
+                Disc_Acc = sess.run(nn.Disc_Acc, feed_dict=fd)
+
+                #update
+                extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                sess.run(extra_update_ops)
+
+                #Learrate
+                new_learn_rate = sess.run(nn.new_learning_rate)
+                if new_learn_rate > 0.00005:
+                    sess.run(nn.add_global)
+
+
+                #print train results every 10 batches
+                if batch %10 == 0:
+                    D_Real, D_Fake, L_tot,Disc_Acc,Enc_loss, reconstr_loss= sess.run([nn.D_loss_real,nn.D_loss_fake,nn.VAE_GAN_loss, nn.Disc_Acc, nn.encode_loss, nn.reconstr_loss],feed_dict=fd)
+                    print("D_Real {:04.2f}  D_Fake {:04.2f} L_tot {:04.2f},Disc_Acc {:04.2f} Enc_loss {:04.2f} reconstr_loss {:04.2f} ".format(D_Real, D_Fake,L_tot, Disc_Acc,Enc_loss, reconstr_loss))
+
+                #print test results every 100 batches
+                if batch %100 == 0:
+                    # #SAVE  TRAIN DATA
+                    fd = {loss_disc_real: D_Real,\
+                    loss_disc_fake: D_Fake,\
+                    disc_acc: Disc_Acc,\
+                    RC_loss: reconstr_loss,\
+                    encode_loss: Enc_loss}
+
+                    summary = sess.run(write_op,feed_dict = fd)
+                    writer_train.add_summary(summary, batch)
+                    writer_train.flush()
+                    # #SAVE  TEST DATA
+                    vx_real ,mp_real= sess.run(real_pair_test)
+                    fd ={nn.vx_real: vx_real, nn.mp_real: mp_real}
+                    D_Real, D_Fake, L_tot,Disc_Acc,Enc_loss, reconstr_loss= sess.run([nn.D_loss_real,nn.D_loss_fake,nn.VAE_GAN_loss, nn.Disc_Acc, nn.encode_loss, nn.reconstr_loss],feed_dict=fd)
+                    print("TEST")
+                    print("D_Real {:04.2f}  D_Fake {:04.2f} L_tot {:04.2f},Disc_Acc {:04.2f} Enc_loss {:04.2f} reconstr_loss {:04.2f} ".format(D_Real, D_Fake,L_tot, Disc_Acc,Enc_loss, reconstr_loss))
+                    #
+                    #SAVE  TEST DATA
+                    fd = {loss_disc_real: D_Real,\
+                    loss_disc_fake: D_Fake,\
+                    disc_acc: Disc_Acc,\
+                    RC_loss: reconstr_loss,\
+                    encode_loss: Enc_loss}
+                    summary = sess.run(write_op,feed_dict = fd)
+                    writer_test.add_summary(summary, batch)
+                    writer_test.flush()
+                    #
+
+                    saved_path = saver.save(sess, model_path + str(batch) + ".ckpt")
+                    saver.restore(sess,model_path + str(batch) + ".ckpt")
+                    print("Model Saved")
+    #                map_gen = sess.run(nn.mp_fake,feed_dict=fd)
+    #                res = {"inp":vx_real,"mp_real":mp_real,"mp_gen":map_gen}
+    #                with  open(test_res_folder + str(batch) + ".pkl", 'wb') as out_file:
+    #                    pickle.dump(res, out_file)

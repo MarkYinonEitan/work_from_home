@@ -7,9 +7,29 @@ import net_3d_5
 from dataset_loader import BATCH_SIZE, NBOX_IN,NBOX_OUT,N_CHANNELS
 
 
+def read_list_file(list_file):
+    pairs=[]
+    with open(list_file) as fp:
+        line = fp.readline()#read header
+        line = fp.readline()
+        while line:
+            wrds = line.split()
+            pdb_id = wrds[0]
+            emd_id = wrds[1]
+            res = float(wrds[2])
+            train_test = wrds[3]
+
+            line = fp.readline()
+            pairs.append((pdb_id,emd_id,res,train_test))
+    return pairs
+
+
 def get_net_by_string(net_string):
     if net_string == 'disc_v1':
         return net_3d_5.DISC_V1()
+    if net_string == 'gan_v1':
+        return net_3d_5.VAE_GAN1()
+
 
     raise Exception('No Net Found')
 

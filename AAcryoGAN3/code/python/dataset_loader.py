@@ -311,18 +311,6 @@ def get_and_check_file_names(pdb_id,folder):
             return {}
     return f_names
 
-def read_list_file(list_file):
-    pairs=[]
-    with open(list_file) as fp:
-        line = fp.readline()#read header
-        line = fp.readline()
-        while line:
-            pdb_id = line[0:4]
-            emd_id = line[5:9]
-            res = float(line[10:13])
-            line = fp.readline()
-            pairs.append((pdb_id,emd_id,res))
-    return pairs
 
 
 # fld = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/first_tests/temp_data"
