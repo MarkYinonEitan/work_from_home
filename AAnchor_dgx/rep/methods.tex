@@ -1,0 +1,43 @@
+\subsection{Processing experimental maps {\color{red} TBD}}
+\paragraph{Validation or Unlabeled} see \ref{ss:create_boxes}
+\subsubsection{Training (Labeled Sets)}
+\paragraph{for each map:}
+\begin{itemize}
+	\item create unlabeled dataset \ref{ss:create_boxes}
+	\item calculate labels
+	\item {\color{red} TBD} filter: \begin{itemize}
+				 \item run Local Correlation Score and delete boxes with box center LCS $<0.8$
+				 \item For boxes labeled 0 (NONE) randmoly select an amount similar to amount of boxes labeled $>0$
+	
+					\end{itemize}
+	\item {\color{red} TBD} augment (only positive\begin{itemize}
+				 \item only proteins (not viruses, because of symmetry)
+				\item Select N rotation triples
+				\item rotate initial  map (but same grid) and pdb structure
+				\item run the above procedure on the rotated map
+					\end{itemize}
+\end{itemize}
+\subsection{Dataset for Detection Problem}
+\subsubsection{Create Boxes {\color{red} TBD}}  \label{ss:create_boxes}
+\paragraph{input:} 
+\begin{enumerate}
+\item mrc map file
+\end{enumerate}
+\paragraph{oupput:} 
+\begin{enumerate}
+\item list of boxes (3D matrices)
+\item list position coordinates for each box
+\end{enumerate}
+\paragraph{procedure :}
+\begin{enumerate}
+\item {\color{blue} done} Create a new grid with a required apix and interpolate, use chimera vop command 
+	\begin{itemize}
+		\item regions identically zero cropped out of the map
+	\end{itemize}
+\item {\color{blue} Done} extract boxes (copy, don't interpolate)
+	\begin{itemize}
+		\item with normalization
+		\item filter boxes with average less then average of the map
+	\end{itemize}
+\item {\color{red} TBD} for each box calc position of the box center
+\end{enumerate}
