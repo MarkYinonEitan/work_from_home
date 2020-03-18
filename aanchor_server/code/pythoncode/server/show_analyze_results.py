@@ -173,6 +173,7 @@ if __name__ == "chimeraOpenSandbox":
         ref_file = sys.argv[5]
         results_file = sys.argv[6]
         test_results(out_file, ref_file , out_file = results_file)
+
     if n_command == 'test_one':
 
         out_file = sys.argv[4]

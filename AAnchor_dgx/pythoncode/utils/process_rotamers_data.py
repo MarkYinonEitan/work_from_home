@@ -78,7 +78,7 @@ def read_rotamers_data_text_file(listFileName):
         pdbID = line_words[1]
         k=k+1
         if k % 100000 ==0:
-            print k , " Rows Readed for list file"
+            print (k , " Rows Readed for list file")
         dict_of_chains = rotamersData.get(pdbID, {})
         chain_ID = line_words[2]
         dict_of_resnums = dict_of_chains.get(chain_ID, {})

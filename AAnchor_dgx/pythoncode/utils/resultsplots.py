@@ -4,7 +4,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
-import cPickle
+import pickle
 import gzip
 from scipy.spatial import KDTree
 
@@ -38,7 +38,7 @@ class DetNetResults(object):
 
     def save_data(self):
         f = gzip.open(self.res_folder+self.file_name, "w")
-        cPickle.dump((self.labels_names,self.xyz,self.results,self.centers_labels), f)
+        pickle.dump((self.labels_names,self.xyz,self.results,self.centers_labels), f)
         f.close()
         return
 
@@ -102,6 +102,9 @@ class DetNetResults(object):
 
             #filter
             in_det = np.in1d(dets,lbs)
+
+
+
             probs = probs[in_det]
             xyz = xyz[in_det,:]
             dets = dets[in_det]
@@ -115,8 +118,13 @@ class DetNetResults(object):
             return probs, xyz,dets
 
 
+        RES={"n_reported":0,"is_false":[],"is_true":[],"prob_of_true":[],"probs_f":[], \
+        "dets_f":[],"xyz_f":[]}
+
         #get detections
         dets_all,xyz_all,probs_all = self.get_non_zero_preds()
+        if len(dets_all)==0:
+            return RES
 
         probs_lb,xyz_lb, dets_lb= filter_and_sort_label(probs_all,xyz_all,dets_all,lbs,N)
         #filter detections
@@ -129,7 +137,6 @@ class DetNetResults(object):
         n_reported = np.asarray(range(len(ref_labels)),dtype = float)+1
         prob_of_true = np.cumsum(true_dets)/n_reported
 
-        RES={}
         RES["n_reported"] = n_reported
         RES["is_false"] = false_dets
         RES["is_true"] = true_dets
@@ -193,7 +200,7 @@ class DetNetResults(object):
 
     def load_data(self):
         f = gzip.open(self.res_folder+self.file_name, 'rb')
-        labels_names,xyz,results,centers_labels = cPickle.load(f)
+        labels_names,xyz,results,centers_labels = pickle.load(f)
         f.close()
         self.labels_names=labels_names
         self.xyz = xyz
@@ -309,7 +316,7 @@ class DetRes4Nets(object):
 
 
 class SingleNetResults(object):
-    def __init__(self, res_folder, labels_names,res_per_epoch=[[]], valid_data=[[],[]], prob_span =  np.arange(0.05,1.0001,0.1), train_data_stat = [],name = 'Untitled'):
+    def __init__(self, res_folder, labels_names,res_per_epoch=[[]], valid_data=[[],[]], prob_span =  np.arange(0.05,1.0001,0.1), train_data_stat =  dict(),name = 'Untitled'):
         self.res_per_epoch=res_per_epoch
         self.res_folder = res_folder
         self.valid_data = valid_data
@@ -320,8 +327,8 @@ class SingleNetResults(object):
         self.det_acc_per_epoch = []
         self.det_fa_per_epoch = []
         self.prob_span = prob_span
-        self.labels = labels_names.keys()
-        self.names = labels_names.values()
+        self.labels = list(labels_names.keys())
+        self.names = list(labels_names.values())
         self.y = []
         self.dets_per_epoch= []
         self.prob_vs_output = {}
@@ -331,13 +338,13 @@ class SingleNetResults(object):
 
     def save_data(self,file_name = 'res_per_epoch.pkl.gz'):
         f = gzip.open(self.res_folder+file_name, "w")
-        cPickle.dump((self.res_per_epoch,self.valid_data,self.train_data_stat), f)
+        pickle.dump((self.res_per_epoch,self.valid_data,self.train_data_stat), f)
         f.close()
         return
 
     def load_data(self,file_name = 'res_per_epoch.pkl.gz'):
         f = gzip.open(self.res_folder+file_name, 'rb')
-        res_per_epoch, valid_data,train_data_stat = cPickle.load(f)
+        res_per_epoch, valid_data,train_data_stat = pickle.load(f)
         f.close()
         self.train_data_stat = train_data_stat
         self.res_per_epoch = res_per_epoch
@@ -346,8 +353,8 @@ class SingleNetResults(object):
         return
 
     def calc_results(self):
-        self.labels = self.labels_names.keys()
-        self.names = self.labels_names.values()
+        self.labels = list(self.labels_names.keys())
+        self.names = list(self.labels_names.values())
         self.y = np.asarray(self.valid_data[1])
         self.dets_per_epoch= [self.calc_detection(x) for x in self.res_per_epoch]
         self.det_acc_per_epoch = [self.calc_detection_accuracy(x, self.y,self.labels ) for x in self.dets_per_epoch]
@@ -376,6 +383,8 @@ class SingleNetResults(object):
 
     def calc_det_vs_prob(self,lb,probs,y,prob_span = np.arange(0,1+0.1,0.1)):
 
+
+
         y_1 = y==lb
         y_0 = y!=lb
 
@@ -389,6 +398,7 @@ class SingleNetResults(object):
             probs_x.append((prob_start+prob_end)/2)
             in_prob = (probs<=prob_end) & (probs>=prob_start)
             n_prob = np.sum(in_prob)+0.00001
+
             det_y.append(np.sum(y_1 & in_prob)/n_prob)
             fa_y.append(np.sum(y_0 & in_prob)/n_prob)
             n_smpls.append(n_prob)
@@ -424,8 +434,9 @@ class SingleNetResults(object):
         plt.imshow(self.det_matrix,interpolation = 'none',cmap = 'nipy_spectral')
         plt.clim(0,1.0)
         plt.colorbar()
-        plt.xticks(self.labels,self.names,rotation=90)
-        plt.yticks(self.labels,self.names)
+        print("DEBUG w22e",self.labels,self.names)
+        plt.xticks(list(self.labels),list(self.names),rotation=90)
+        plt.yticks(list(self.labels),list(self.names))
         plt.title('column I, column J = Prob(Detecting AA of type I, given AA of type J ]')
         ax = plt.gca()
         ax.set_xticks(np.array(self.labels)+0.5, minor=True)

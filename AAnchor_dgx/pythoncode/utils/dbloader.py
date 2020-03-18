@@ -5,7 +5,7 @@ Class to work with datasets
 
 #### Libraries
 # Standard library
-import cPickle
+import pickle
 import gzip
 import os
 import time
@@ -19,7 +19,7 @@ import timeit
 try:
   from scipy import ndimage
 except ImportError:
-  print "RUN without scipy"
+  print ("RUN without scipy")
 
 from process_rotamers_data import read_rotamers_data_text_file
 from process_rotamers_data import get_mrc_file_name,get_pdb_id
@@ -65,13 +65,6 @@ def box_from_box_center(x,y,z,cbs=11,apx=1):
     return box_xyz
 
 
-    mean_all = np.mean(data_swapped)
-    mean_weights = np.ones((11,11,11))/(11*11*11)
-    mean_matrix = ndimage.filters.convolve(data_swapped,mean_weights,cval=-10.0**10,mode='constant',origin=(5,5,5))
-
-
-
-
 def filter_dy_mean(data_mtrx,cbs=11):
     assert cbs==11
     mean_all = np.mean(data_mtrx)
@@ -92,13 +85,13 @@ def get_box_centers_for_detection(data_mtrx,filter_matrix,cbs=11):
 #### Load the Data and Labels
 def save_det_labeled_5tuple_data(filename,data_mtrx,filter_matrix,C,centers,labels):
     f = gzip.open(filename, "w")
-    cPickle.dump((data_mtrx,filter_matrix,C,centers,labels), f)
+    pickle.dump((data_mtrx,filter_matrix,C,centers,labels), f)
     f.close()
     return
 
 def load_swap_labeled_5tuple_data(filename):
     f = gzip.open(filename, 'rb')
-    mtrx_not_swapped,filter_matrix_not_swapped,C,centers,labels  = cPickle.load(f)
+    mtrx_not_swapped,filter_matrix_not_swapped,C,centers,labels  = pickle.load(f,encoding="bytes")
     f.close()
     data_mtrx = np.swapaxes(mtrx_not_swapped,0,2)
     filter_matrix = np.swapaxes(filter_matrix_not_swapped,0,2)
@@ -106,7 +99,7 @@ def load_swap_labeled_5tuple_data(filename):
 
 def save_class_5tuple_data(filename,boxes,centers,labels,centers_pdb,labels_pdb):
     f = gzip.open(filename, "w")
-    cPickle.dump((boxes,centers,labels,centers_pdb,labels_pdb), f)
+    pickle.dump((boxes,centers,labels,centers_pdb,labels_pdb), f)
     f.close()
     return
 
@@ -119,14 +112,14 @@ def load_class_5tuple_data(f_names):
     k=0
     for filename in f_names:
         f = gzip.open(filename, 'rb')
-        boxes_1,centers_1,labels_1,centers_pdb_1,labels_pdb_1  = cPickle.load(f)
+        boxes_1,centers_1,labels_1,centers_pdb_1,labels_pdb_1  = pickle.load(f)
         f.close()
         boxes = boxes+ boxes_1
         centers = centers+centers_1
         labels= labels+labels_1
         centers_pdb = centers_pdb+centers_pdb_1
         labels_pdb = labels_pdb+labels_pdb_1
-        print "DEBUG 34: ",k, filename
+        print ("DEBUG 34: ",k, filename)
         k=k+1
 
     #convert labels to integers
@@ -178,7 +171,11 @@ def load_train_data_to_dict(file_name_s, empty_dict,normalization = Mean0Sig1Nor
     labels_all = []
     for data_file in file_name_s:
         # load data - valid
-        data_mtrx,filter_matrix,C,centers,labels = load_swap_labeled_5tuple_data(data_file)
+        try:
+            data_mtrx,filter_matrix,C,centers,labels = load_swap_labeled_5tuple_data(data_file)
+        except:
+            print ("DEBUG LOAD ", data_file , "UNLOADED")
+            continue
         box_centers_ijk = global_xyz_to_ijk(np.asarray(centers),C)
 
         pred_boxes,_= get_boxes(data_mtrx,box_centers_ijk,C,normalization)
@@ -190,9 +187,9 @@ def load_train_data_to_dict(file_name_s, empty_dict,normalization = Mean0Sig1Nor
 
     stop = timeit.default_timer()
 
-    print ""
-    print "DATA LOADED  " +str(stop - start ) +"secs",time.ctime()
-    print ""
+    print ("")
+    print ("DATA LOADED  " +str(stop - start ) +"secs",time.ctime())
+    print ("")
 
     return
 
@@ -215,13 +212,13 @@ class DBLoaderDetection(object):
 
     @staticmethod
     def load_files_labeled(filenames):
-        print "DEBUG f",filenames
+        print ("DEBUG f",filenames)
         boxes = []
         centers=[]
         labels=[]
         for fname in filenames:
             f = gzip.open(fname, 'rb')
-            boxes_1, centers_1,labels_1  = cPickle.load(f)
+            boxes_1, centers_1,labels_1  = pickle.load(f)
             f.close()
             boxes = boxes+boxes_1
             centers = centers+centers_1
@@ -234,7 +231,7 @@ class DBLoaderDetection(object):
         centers=[]
         for fname in filenames:
             f = gzip.open(fname[0], 'rb')
-            boxes_1, centers_1  = cPickle.load(f)
+            boxes_1, centers_1  = pickle.load(f)
             f.close()
             boxes = boxes+boxes_1
             centers = centers+centers_1
@@ -274,7 +271,7 @@ class DBLoader(object):
         labeled_data = args[0][0]
         for fname in args[1:]:
             f = gzip.open(fname[0], 'rb')
-            data_one_file,  _ = cPickle.load(f)
+            data_one_file,  _ = pickle.load(f)
             f.close()
             labeled_data[0] = labeled_data[0]+data_one_file[0]
             labeled_data[1] = labeled_data[1]+data_one_file[1]
@@ -312,7 +309,7 @@ class DBLoader(object):
         labeled_data = [[],[]] # [ [data
         for file_name in  filenames:
             f = gzip.open(self.data_folder+file_name, 'rb')
-            labeled_data_one_file,  _ = cPickle.load(f)
+            labeled_data_one_file,  _ = pickle.load(f)
             f.close()
             labeled_data[0] = labeled_data[0]+labeled_data_one_file[0]
             labeled_data[1] = labeled_data[1]+labeled_data_one_file[1]
@@ -338,8 +335,8 @@ class DBLoader(object):
             full_path_names =[self.data_folder+f  for f in f_names_list]
             exec('thread_args = zip([' + var_name + ']+full_path_names)')
             t = threading.Thread(target=DBLoader.load_files_labeled, args=thread_args)
-    	    threads.append(t)
-    	    #t.start()
+            threads.append(t)
+            #t.start()
             k=k+1
 
         for t in threads:
@@ -388,7 +385,7 @@ class LabelbyAAType(object):
 
     @staticmethod
     def get_labels_to_names_dict():
-        l2n = {v: k for k, v in LabelbyAAType.label_dict.iteritems()}
+        l2n = {v: k for k, v in LabelbyAAType.label_dict.items()}
         l2n[5] = "CYS"
         l2n[15] = "PRO"
         return l2n

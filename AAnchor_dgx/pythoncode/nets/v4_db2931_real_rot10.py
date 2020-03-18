@@ -46,12 +46,6 @@ LABELELING = LabelbyAAType
 train_emds = ['3713','7526','7300','7436','3842','6714','6675','6555','3999','3631','3574','3014']
 valid_emds = ['7050']
 
-
-
-NETWORK = all_nets.V5_no_reg()
-
-
-
 train_data_files = []
 for train_num in train_emds:
     train_data_files = train_data_files+glob(DATABASE_FOLDER+'*{}*.pkl.gz'.format(train_num))

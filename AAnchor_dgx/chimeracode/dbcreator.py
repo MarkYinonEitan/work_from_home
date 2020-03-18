@@ -10,7 +10,7 @@ from VolumeViewer import volume_from_grid_data
 from VolumeViewer import open_volume_file
 from VolumeViewer import volume_list
 from Matrix import euler_xform
-import cPickle
+import pickle
 import gzip
 
 
@@ -30,11 +30,11 @@ import dbloader
 from dbloader import LabelbyAAType, save_class_5tuple_data,save_det_labeled_5tuple_data
 from dbloader import Mean0Sig1Normalization, NoNormalization
 
-
-defoult_rotamers_file_name = dir_path +'/../data/rotamersdata/DatasetForBBDepRL2010.txt'
+data_folder  = '/specific/netapp5_2/iscb/wolfson/Mark/data/AAnchor/'
+defoult_rotamers_file_name = data_folder  + '/rotamersdata/DatasetForBBDepRL2010.txt'
 DEFAULT_DIST_THRESHOLD = 1.5
 DEFAULT_NONES_RATIO = 0.3
-TEMP_FOLDER =  dir_path +'/../data/temp/'
+TEMP_FOLDER =  data_folder  + '/temp/'
 DEFAULT_STEP_FOR_DETECTION = 2
 DEBUG_FILE = TEMP_FOLDER+'debug.txt'
 
@@ -54,8 +54,6 @@ def get_regions(pdb_file,N):
         y_max = max(at.coord()[1],y_max)
         z_min = min(at.coord()[2],z_min)
         z_max = max(at.coord()[2],z_max)
-
-    print "DEBUG LIMITS",(x_min,x_max,y_min,y_max,z_min,z_max)
 
     x_bounds = np.linspace(x_min,x_max,N+1)
     y_bounds = np.linspace(y_min,y_max,N+1)
@@ -143,7 +141,7 @@ class EMmaps(object):
                     y_pos[i,j,k] = y
                     z_pos[i,j,k] = z
         f = gzip.open(output_map, "w")
-        cPickle.dump((data_mtrx, x_pos,y_pos,z_pos), f)
+        pickle.dump((data_mtrx, x_pos,y_pos,z_pos), f)
         f.close()
         return
 
@@ -247,7 +245,7 @@ class EMmaps(object):
 #         return
 #     def save_labeled_data(self, boxes, centers,labels,filename = dir_path + '/../data/temp/def_boxes.pkl.gz' ):
 #         f = gzip.open(filename, "w")
-#         cPickle.dump((boxes, centers,labels), f)
+#         pickle.dump((boxes, centers,labels), f)
 #         f.close()
 #
 #
@@ -295,7 +293,7 @@ class EMmaps(object):
 #     	if filename== "NONE":
 #     		filename = self.target_folder+"default.pkl.gz"
 #     	f = gzip.open(filename, "w")
-#     	cPickle.dump((training_pairs, debug_data), f)
+#     	pickle.dump((training_pairs, debug_data), f)
 #     	f.close()
 #
 #     def test_residue_data(self,res_struct, res_data):
@@ -388,8 +386,6 @@ class DBcreator(object):
             print "DEBUG FILTER Different res num"
             return False
         return True
-
-
 
     def calc_box_centers_and_labels_from_pdb(self,pdb_file_name, check_list = False,limits_pdb=([-10.0**6,10.0**6],[-10.0**6,10.0**6],[-10.0**6,10.0**6])):
 
@@ -560,7 +556,7 @@ class DBcreator(object):
 
     def create_class_db_corners(self,mrc_file,pdb_file,file_name = [],file_name_suffix = '.pkl.gz',limits_pdb=([-10.0**6,10.0**6],[-10.0**6,10.0**6],[-10.0**6,10.0**6]) ):
 
-
+        print("DEBUG 3435",mrc_file,limits_pdb )
         pdb_file_full_name = self.input_pdb_folder+pdb_file
         mrc_file_full_name = self.mrc_maps_folder+mrc_file
 
@@ -570,9 +566,9 @@ class DBcreator(object):
 
         #calc all boxes centers
         centers_pdb,labels_pdb = self.calc_box_centers_and_labels_from_pdb(pdb_file,check_list = self.use_list,limits_pdb = limits_pdb)
-        print "DEBUG 44", len(labels_pdb)
+        print( "DEBUG 44", len(labels_pdb) ,mrc_file,limits_pdb )
         if len(labels_pdb)==0:
-            print "DEBUG NO RES' in the BOX"
+            print("DEBUG NO RES' in the BOX",mrc_file,limits_pdb )
             return
 
         if self.use_list:
@@ -697,7 +693,7 @@ class DBcreator(object):
 
 
 
-    def create_unlabeled_db(self,mrc_file_full_name,file_to_save,file_name_suffix = '.pkl.gz'):
+    def create_unlabeled_db(self,mrc_file_full_name,file_to_save,file_name_suffix = '.pkl.gz', map_thr_sigma = 1):
 
 
         #'RESAMPLE with CHIMERA'
@@ -709,10 +705,18 @@ class DBcreator(object):
         # calc positions and labels
         data_mtrx = resampled_map.full_matrix()
 
+
+
         #calc transformation
         C = EMmaps.get_transformation_ijk_to_xyz(resampled_map)
-        #calc filter matrix
+        #calc filter matrix from sigma
         filter_matrix = np.ones(data_mtrx.shape)
+        mean_all = np.mean(data_mtrx)
+        sigma_all = np.std(data_mtrx)
+        mean_weights = np.ones((11,11,11))/(11*11*11)
+        is_above_thr = data_mtrx>(mean_all+map_thr_sigma*sigma_all)
+        filter_matrix[is_above_thr] = 1
+
 
         centers_ijk  = []
         labels_ijk = []

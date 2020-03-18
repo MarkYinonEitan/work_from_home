@@ -27,7 +27,7 @@ from dbloader import LabelbyAAType,Mean0Sig1Normalization, NoNormalization
 
 
 def create_db_n_m_file(n=0,m=0):
-    data_folder = dir_path + '/../../data/'
+    data_folder  = '/specific/netapp5_2/iscb/wolfson/Mark/data/AAnchor/' 
     input_pdb_folder = data_folder+'/cryoEM/raw_data/res2931_rot10/'
     mrc_maps_folder = data_folder+'/cryoEM/raw_data/res2931_rot10/'
     target_folder =  data_folder+'/cryoEM/DB2931class_rot10/'

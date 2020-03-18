@@ -14,6 +14,7 @@ import itertools
 import operator
 import math
 import numpy as np
+import copy
 from collections import deque
 from functools import wraps
 
@@ -690,3 +691,13 @@ class KDTree4(object):
         points = self.kdt.search_nn_dist(np.append(point,0.0), dist)
         inxs = [int(round(x[3]/self.eps)) for x in points]
         return inxs
+
+class KDTree_3D_objects(object):
+    def __init__(self, points, objects):
+        self.points = copy.copy(points)
+        self.objects = copy.copy(objects)
+        self.kdt4 = KDTree4(self.points)
+    def in_range(self,point,dist):
+        inxs = self.kdt4.in_range(point,dist)
+        objs = [self.objects[i] for i in inxs]
+        return inxs,objs
