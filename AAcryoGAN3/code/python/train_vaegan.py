@@ -7,7 +7,7 @@ import numpy as np
 import shutil
 import pickle
 import tensorflow as tf
-from timeit import default_timer as timer
+import time
 if '__file__' in locals():
     dir_path = os.path.dirname(os.path.realpath(__file__))
 else:
@@ -100,7 +100,6 @@ def run_training(real_data_train,real_data_test, net_string = 'None',out_fld = N
         saver = tf.train.Saver(max_to_keep=2000)
 
 
-        time_start = timer()
         sess.run(real_iter_test.initializer)
         sess.run(real_iter_train.initializer)
         # training-loop
@@ -110,6 +109,10 @@ def run_training(real_data_train,real_data_test, net_string = 'None',out_fld = N
         disc_acc =  tf.Variable(0.0)
         encode_loss =  tf.Variable(0.0)
         RC_loss =  tf.Variable(0.0)
+        Mean_Map =  tf.Variable(0.0)
+        Sigma_Map =  tf.Variable(0.0)
+
+
 
 
         tf.summary.scalar("loss_disc_real", loss_disc_real)
@@ -117,6 +120,8 @@ def run_training(real_data_train,real_data_test, net_string = 'None',out_fld = N
         tf.summary.scalar("disc_acc", disc_acc)
         tf.summary.scalar("encode_loss", encode_loss)
         tf.summary.scalar("RC_loss", RC_loss)
+        tf.summary.scalar("Mean_Map", Mean_Map)
+        tf.summary.scalar("Sigma_Map", Sigma_Map)
 
         write_op = tf.summary.merge_all()
 
@@ -154,8 +159,9 @@ def run_training(real_data_train,real_data_test, net_string = 'None',out_fld = N
 
                 #print train results every 10 batches
                 if batch %10 == 0:
-                    D_Real, D_Fake, L_tot,Disc_Acc,Enc_loss, reconstr_loss= sess.run([nn.D_loss_real,nn.D_loss_fake,nn.VAE_GAN_loss, nn.Disc_Acc, nn.encode_loss, nn.reconstr_loss],feed_dict=fd)
-                    print("D_Real {:04.2f}  D_Fake {:04.2f} L_tot {:04.2f},Disc_Acc {:04.2f} Enc_loss {:04.2f} reconstr_loss {:04.2f} ".format(D_Real, D_Fake,L_tot, Disc_Acc,Enc_loss, reconstr_loss))
+                    D_Real, D_Fake, L_tot,Disc_Acc,Enc_loss, reconstr_loss, mean_map, sigma_map= sess.run([nn.D_loss_real,nn.D_loss_fake,nn.VAE_GAN_loss, nn.Disc_Acc, nn.encode_loss, nn.reconstr_loss, nn.mp_fake_mean, nn.mp_fake_sigma],feed_dict=fd)
+                    print("D_Real {:04.2f}  D_Fake {:04.2f} L_tot {:04.2f},Disc_Acc {:04.2f} Enc_loss {:04.2f} reconstr_loss {:04.2f} Mean {:04.2f} Sigma {:04.2f} ".format(D_Real, D_Fake,L_tot, Disc_Acc,Enc_loss, reconstr_loss, mean_map, sigma_map))
+                    print("BATCH: ",batch, "  TIME:" , time.ctime())
 
                 #print test results every 100 batches
                 if batch %100 == 0:
@@ -164,7 +170,10 @@ def run_training(real_data_train,real_data_test, net_string = 'None',out_fld = N
                     loss_disc_fake: D_Fake,\
                     disc_acc: Disc_Acc,\
                     RC_loss: reconstr_loss,\
-                    encode_loss: Enc_loss}
+                    encode_loss: Enc_loss,\
+                    Mean_Map : mean_map,\
+                    Sigma_Map :sigma_map}
+
 
                     summary = sess.run(write_op,feed_dict = fd)
                     writer_train.add_summary(summary, batch)
@@ -172,16 +181,20 @@ def run_training(real_data_train,real_data_test, net_string = 'None',out_fld = N
                     # #SAVE  TEST DATA
                     vx_real ,mp_real= sess.run(real_pair_test)
                     fd ={nn.vx_real: vx_real, nn.mp_real: mp_real}
-                    D_Real, D_Fake, L_tot,Disc_Acc,Enc_loss, reconstr_loss= sess.run([nn.D_loss_real,nn.D_loss_fake,nn.VAE_GAN_loss, nn.Disc_Acc, nn.encode_loss, nn.reconstr_loss],feed_dict=fd)
+                    D_Real, D_Fake, L_tot,Disc_Acc,Enc_loss, reconstr_loss, mean_map, sigma_map= sess.run([nn.D_loss_real,nn.D_loss_fake,nn.VAE_GAN_loss, nn.Disc_Acc, nn.encode_loss, nn.reconstr_loss, nn.mp_fake_mean, nn.mp_fake_sigma],feed_dict=fd)
                     print("TEST")
-                    print("D_Real {:04.2f}  D_Fake {:04.2f} L_tot {:04.2f},Disc_Acc {:04.2f} Enc_loss {:04.2f} reconstr_loss {:04.2f} ".format(D_Real, D_Fake,L_tot, Disc_Acc,Enc_loss, reconstr_loss))
+                    print("D_Real {:04.2f}  D_Fake {:04.2f} L_tot {:04.2f},Disc_Acc {:04.2f} Enc_loss {:04.2f} reconstr_loss {:04.2f} Mean {:04.2f} Mean {:04.2f} ".format(D_Real, D_Fake,L_tot, Disc_Acc,Enc_loss, reconstr_loss, mean_map, sigma_map))
+
                     #
                     #SAVE  TEST DATA
                     fd = {loss_disc_real: D_Real,\
                     loss_disc_fake: D_Fake,\
                     disc_acc: Disc_Acc,\
                     RC_loss: reconstr_loss,\
-                    encode_loss: Enc_loss}
+                    encode_loss: Enc_loss,\
+                    Mean_Map : mean_map,\
+                    Sigma_Map :sigma_map}
+
                     summary = sess.run(write_op,feed_dict = fd)
                     writer_test.add_summary(summary, batch)
                     writer_test.flush()

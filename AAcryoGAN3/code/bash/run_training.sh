@@ -1,6 +1,3 @@
-
-
-
 LIST_FILE="/specific/netapp5_2/iscb/wolfson/Mark/data/AAcryoGaN3/list_3A.txt"
 VOX_FOLDER="/specific/netapp5_2/iscb/wolfson/Mark/data/AAcryoGaN3/vx_data/"
 OUT_FOLDER="/specific/netapp5_2/iscb/wolfson/Mark/data/AAcryoGaN3/output/"

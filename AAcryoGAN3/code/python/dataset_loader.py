@@ -54,7 +54,7 @@ def getbox(mp,I,J,K,NN):
     return mp[I-NN//2:I+NN//2+1,J-NN//2:J+NN//2+1,K-NN//2:K+NN//2+1,np.newaxis]
 
 class MolData():
-    def __init__(self,f_names,pdb_id):
+    def __init__(self,f_names,pdb_file):
         self.out = np.load(f_names['OUT'])
         self.vx = {}
         self.vx['C'] = np.load(f_names['C'])
@@ -64,7 +64,7 @@ class MolData():
         self.vx['H'] = np.load(f_names['H'])
 
         self.lcc = np.load(f_names['LCC'])
-        self.pdb_id = pdb_id
+        self.pdb_id = pdb_file[:-4]
 
 class DataPoint():
     def __init__(self,x,y,z,map,vx_dict,pdb_id,is_real = True):
@@ -83,6 +83,7 @@ class EM_DATA_DISC_RANDOM():
 
     def __init__(self,folder_name, train_pdbs = []):
         #load data
+        'Error change train'
         self.mols_train = load_pdb_list(folder_name, train_pdbs)
 
         #create points
@@ -112,6 +113,9 @@ def points_from_mols(mols, is_real = True):
     for ml in mols:
 
         all_coords = np.nonzero(ml.lcc)
+
+        print("DEBUG RETRY32332")
+        print(len(all_coords))
         for i,j in enumerate(all_coords[0]):
             points.append(DataPoint(all_coords[0][i],all_coords[1][i],all_coords[2][i]\
             , ml.out, ml.vx, ml.pdb_id,is_real = is_real))
@@ -234,14 +238,15 @@ class EM_DATA():
 
 def load_pdb_list(folder_name, pdb_list):
     mols={}
-    for pdb_id in pdb_list:
+    for pdb_file in pdb_list:
         try:
-            pdb_files = get_and_check_file_names(pdb_id,folder_name)
-            mol_data = MolData(pdb_files,pdb_id)
-            mols[pdb_id] = mol_data
-            print("{} Loaded".format(pdb_id))
+            pdb_files = get_and_check_file_names(pdb_file,folder_name)
+            print("DEBUG 62",pdb_files, pdb_file,folder_name)
+            mol_data = MolData(pdb_files,pdb_file)
+            mols[pdb_file] = mol_data
+            print("{} Loaded".format(pdb_file))
         except Exception as e:
-            print("{} FAILED, Error : ".format(pdb_id, str(e)))
+            print("{} FAILED, Error : Marik ".format(pdb_file, e))
     return mols
 
 def adjust_mean_std(mp,sigma=SIGMA, mean=MEAN):
@@ -293,22 +298,31 @@ def generator_from_data_test(points_data):
 
 
 
-def get_file_names(pdb_id,folder):
+def get_file_names(pdb_file,folder):
+    pdb_id = pdb_file[:-4]
     f_names={}
     f_names['OUT'] = folder+'/'+'F_'+pdb_id+'_output.npy'
     for at in VX_FILE_SUFF.keys():
         f_names[at] = folder+'/'+'F_'+pdb_id+VX_FILE_SUFF[at]+'.npy'
     f_names['LCC'] = folder+'/'+'F_'+pdb_id+'_lcc.npy'
+    f_names["MRC"] = folder+'/'+pdb_id+'_gan.mrc'
+    f_names["GAN_NPY"] = folder +'/F'+pdb_id +'_gan.npy'
+    f_names["PDB_FIT"] = folder +'/F'+pdb_id +'_fit2gan.pdb'
+
+
     return f_names
 
 
 
-def get_and_check_file_names(pdb_id,folder):
-    f_names = get_file_names(pdb_id,folder)
-    for f_name in f_names.values():
-        if not os.path.isfile(f_name):
+def get_and_check_file_names(pdb_file,folder):
+    f_names = get_file_names(pdb_file,folder)
+    for key in list(VX_FILE_SUFF.keys())+['LCC','OUT']:
+        print("DEBUG 44", key, f_names[key])
+        if not os.path.isfile(f_names[key]):
             print(f_name)
             return {}
+
+    print("DEBUG f_names", len(f_names))
     return f_names
 
 

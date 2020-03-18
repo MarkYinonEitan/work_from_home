@@ -1,10 +1,19 @@
-from tensorflow.python.client import device_lib
-import tensorflow as tf
+try:
+  import tensorflow as tf
+  import net_3d_5
+  import net_3d_mean_sigma
+except ImportError:
+  print("run without TENSORFLOW")
+
 import matplotlib.pyplot as plt
 import dataset_loader
 import numpy as np
-import net_3d_5
+
 from dataset_loader import BATCH_SIZE, NBOX_IN,NBOX_OUT,N_CHANNELS
+
+def assert_vx_size_and_resolution(vx_size,res):
+    if (vx_size != dataset_loader.VOX_SIZE ) or (res != dataset_loader.RESOLUTION ):
+        raise Exception("VX_SIZE or RES uncorrect")
 
 
 def read_list_file(list_file):
@@ -18,9 +27,10 @@ def read_list_file(list_file):
             emd_id = wrds[1]
             res = float(wrds[2])
             train_test = wrds[3]
+            is_virus = wrds[4]
 
             line = fp.readline()
-            pairs.append((pdb_id,emd_id,res,train_test))
+            pairs.append({"pdb_file":pdb_id,"emd_file":emd_id,"res":res,"train_test":train_test, "is_virus":is_virus})
     return pairs
 
 
@@ -29,6 +39,8 @@ def get_net_by_string(net_string):
         return net_3d_5.DISC_V1()
     if net_string == 'gan_v1':
         return net_3d_5.VAE_GAN1()
+    if net_string == 'gan_mean_sigma':
+        return net_3d_mean_sigma.VAE_GAN1()
 
 
     raise Exception('No Net Found')

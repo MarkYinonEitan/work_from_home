@@ -103,16 +103,19 @@ def run_discriminator(inp_data_fld, pdb_id, out_file_name,disc_net_str,disc_weig
     out_matrx = utils_project.tstpoint2mtrx(test_points)
     np.save(out_file_name,out_matrx)
 
+def assert_vx_size_and_resolution(vx_size,res):
+    if (vx_size != dataset_loader.VOX_SIZE ) or (res != dataset_loader.RESOLUTION ):
+        raise Exception("VX_SIZE or RES uncorrect")
 
 
 if __name__ == "__main__":
-    list_file   = sys.argv[1]
-    vx_folder   = sys.argv[2]
-    out_folder  = sys.argv[3]
-    net_str     = sys.argv[4]
-    n_epochs    = np.float(sys.argv[5])
-    resolution  = np.float(sys.argv[6])
-    vx_size     = np.float(sys.argv[7])
+    list_file   = "/specific/netapp5_2/iscb/wolfson/Mark/data/AAcryoGaN3/list_3A.txt"
+    vx_folder   = "/specific/netapp5_2/iscb/wolfson/Mark/data/AAcryoGaN3/vx_data/"
+    out_folder  = "/specific/netapp5_2/iscb/wolfson/Mark/data/AAcryoGaN3/output/"
+    net_str     = "gan_v1"
+    n_epochs    = 30
+    resolution  = 3.0
+    vx_size     = 1.0
 
     print("list_file:",list_file)
     print("vx_folder:",vx_folder)
@@ -122,7 +125,7 @@ if __name__ == "__main__":
     print("resolution:",resolution)
     print("vx_size:",vx_size)
 
-    utils_project.assert_vx_size_and_resolution(vx_size,resolution)
+    assert_vx_size_and_resolution(vx_size,resolution)
     real_data_train, real_data_test = train_vaegan.get_data_for_train(vx_fold = vx_folder,list_file = list_file)
     print("DEBUG 1102",real_data_train.N_batches)
     train_vaegan.run_training(real_data_train,real_data_test, net_string = net_str,out_fld = out_folder)
