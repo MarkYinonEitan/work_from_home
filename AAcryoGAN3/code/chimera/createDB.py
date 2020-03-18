@@ -17,22 +17,14 @@ python_path = dir_path +'/../python/'
 sys.path.append(python_path)
 import dataset_loader
 reload(dataset_loader)
-from dataset_loader import read_list_file, get_file_names,VX_FILE_SUFF
+from dataset_loader import  get_file_names,VX_FILE_SUFF
 from dataset_loader import VOX_SIZE, RESOLUTION, NBOX_IN, N_SAMPLS_FOR_1V3
+import utils_project
+from utils_project import read_list_file
 
 #base_data_folder = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/"
 base_data_folder = "//specific/netapp5_2/iscb/wolfson/Mark/data/AAcryoGaN3/"
 
-def read_list_file_old(list_file):
-    emdcodes=[]
-    pdbcodes =[]
-    with open(list_file) as fp:
-        for cnt, line in enumerate(fp):
-            words = line.split()
-            emdcodes.append(words[0])
-            pdbcodes.append(words[-1])
-
-    return zip((emdcodes, pdbcodes))
 
 def get_prot_gabarites(pdb_id):
 
@@ -68,6 +60,7 @@ def calc_random_sample(lcc_mtrx, pdb_id):
     return lcc_mtrx
 
 def calc_LCC(pdb_id,map_id,grid3D):
+    print("DEBUG 8888", pdb_id, map_id)
     sim_map_id = 7001
     res_for_simulation=3
     lcc_map_id = 7002
@@ -184,8 +177,8 @@ def calc_all_matrices(pdb_file, map_file,vx_size = VOX_SIZE, res = RESOLUTION):
 
     return inp_mtrc, output_mtrx, lcc_mtrx
 
-def save_matrc_to_folder(folder_name,pdb_id,inp_mtrc,output_mtrx,lccc_mtrx):
-    f_names = get_file_names(pdb_id,folder_name)
+def save_matrc_to_folder(folder_name,pdb_file,inp_mtrc,output_mtrx,lccc_mtrx):
+    f_names = get_file_names(pdb_file,folder_name)
     np.save(f_names['OUT'],output_mtrx)
     np.save(f_names['LCC'],lccc_mtrx)
 
@@ -198,15 +191,15 @@ def create_database(input_folder, output_folder, list_file):
     pairs = read_list_file(list_file)
     for pair in pairs:
         runCommand('close all')
-        map_id = pair[1]
-        pdb_id = pair[0]
+        map_file = pair["emd_file"]
+        pdb_file = pair["pdb_file"]
         # get files
-        map_file = glob.glob(input_folder+'/emd-{}.*'.format(map_id))[0]
-        pdb_file = glob.glob(input_folder+'/{}.*'.format(pdb_id))[0]
+        full_map_file = input_folder+'/'+ map_file
+        full_pdb_file = input_folder+'/'+ pdb_file
         #calc voxalization
-        inp_mtrc, output_mtrx, local_fit_matrix = calc_all_matrices(pdb_file, map_file,vx_size = VOX_SIZE, res = RESOLUTION)
+        inp_mtrc, output_mtrx, local_fit_matrix = calc_all_matrices(full_pdb_file, full_map_file,vx_size = VOX_SIZE, res = RESOLUTION)
         #save data to folder
-        save_matrc_to_folder(output_folder,pdb_id,inp_mtrc, output_mtrx, local_fit_matrix)
+        save_matrc_to_folder(output_folder,pdb_file,inp_mtrc, output_mtrx, local_fit_matrix)
 
 
 
@@ -229,4 +222,4 @@ def create_real_data_res3():
 
 ####
 #create_synth_data_res6()
-create_real_data_res3()
+#create_real_data_res3()
