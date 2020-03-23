@@ -1,0 +1,168 @@
+import sys
+import os
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+import cPickle
+import gzip
+
+if '__file__' in locals():
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+else:
+    dir_path = os.getcwd()
+utils_path = dir_path + '../utils/'
+sys.path.append(utils_path)
+
+from process_rotamers_data import get_mrc_file_name, get_pdb_id
+from process_rotamers_data import read_rotamers_data_text_file
+
+class SingleNetResults(object):
+    def __init__(self, res_folder, labels_names,res_per_epoch=[[]], valid_data=[[],[]],
+                    prob_span =  np.arange(0,1+0.1,0.1)):
+        self.res_per_epoch=res_per_epoch
+        self.res_folder = res_folder
+        self.valid_data = valid_data
+        self.det_fa_per_epoch = []
+	self.labels_names = labels_names
+        self.dets_per_epoch = []
+        self.det_acc_per_epoch = []
+        self.det_fa_per_epoch = []
+        self.prob_span = prob_span
+        self.labels = labels_names.keys()
+        self.names = labels_names.values()
+        self.y = []
+        self.dets_per_epoch= []
+        self.prob_vs_output = {}
+        self.det_matrix = []
+        return 
+    
+    def save_data(self,file_name = 'res_per_epoch.pkl.gz'):
+        f = gzip.open(self.res_folder+file_name, "w")
+        cPickle.dump((self.res_per_epoch,self.valid_data), f)
+        f.close()
+        return
+
+    def load_data(self,file_name = 'res_per_epoch.pkl.gz'):
+        f = gzip.open(self.res_folder+file_name, 'rb')
+        res_per_epoch, valid_data = cPickle.load(f)
+        f.close()
+        self.res_per_epoch = res_per_epoch
+        self.valid_data = valid_data
+        self.calc_results()
+        return 
+
+    def calc_results(self):
+        self.labels = self.labels_names.keys()
+        self.names = self.labels_names.values()
+        self.y = self.valid_data[1]
+        self.dets_per_epoch= [self.calc_detection(x) for x in self.res_per_epoch]
+        self.det_acc_per_epoch = [self.calc_detection_accuracy(x, self.y,self.labels ) for x in self.dets_per_epoch]
+        self.det_fa_per_epoch = [self.calc_FA_rate(x, self.y,self.labels ) for x in self.dets_per_epoch]
+        
+        self.prob_vs_output = {}
+        for lb in self.labels:            
+            prob_x, det_y,fa_y = self.calc_det_vs_prob(lb,self.res_per_epoch[-1][:,lb],self.y,self.prob_span )
+            self.prob_vs_output[lb]={'prob_x':prob_x,'det_y':det_y,'fa_y':fa_y}
+         
+
+        self.det_matrix = self.calc_detection_matrix(self.dets_per_epoch[-1],
+                                                    self.y,self.labels)
+        return
+
+    def calc_detection(self,soft_max_probs):
+        det = np.argmax(soft_max_probs,axis=1)
+        return det
+
+    def calc_detection_accuracy(self,dets, y,labels ):
+        N = np.array([np.sum(y == lb) for lb in labels ],dtype=float) +0.0001
+        true_detections = dets == y
+        n_det=np.array([np.sum((true_detections) & (y == lb)) for lb in labels])
+        det_acc = []
+        return n_det/N
+
+    def calc_det_vs_prob(self,lb,probs,y,prob_span = np.arange(0,1+0.1,0.1)):
+
+        y_1 = y==lb
+        y_0 = y!=lb
+
+        probs_x = []
+        det_y = []
+        fa_y = []
+        n_smpls = []
+        for in_p in range(1,len(prob_span)):
+            prob_start = prob_span[in_p-1]
+            prob_end = prob_span[in_p]
+            probs_x.append((prob_start+prob_end)/2)
+            in_prob = (probs<=prob_end) & (probs>=prob_start)
+            n_prob = np.sum(in_prob)+0.00001
+            det_y.append(np.sum(y_1 & in_prob)/n_prob)
+            fa_y.append(np.sum(y_0 & in_prob)/n_prob)
+            n_smpls.append(n_prob)    
+    
+        return probs_x, det_y,fa_y
+
+    def calc_detection_matrix(self,dets,y,lbs):
+        det_mat = np.zeros((len(lbs),len(lbs)),dtype=float)
+        for lb_true in lbs:
+            in_true = y == lb_true
+            n_true = np.sum(in_true)+0.001
+            for lb_det in lbs:
+                in_det = dets==lb_det
+                det_mat[lb_true,lb_det] = np.sum(in_det & in_true)/n_true
+        return det_mat
+             
+
+
+
+    def calc_FA_rate(self,dets, y,labels):
+        """
+        False Alarm Rate = m/n
+        m - number of false positive detections
+        n - number  of samples of other labels
+        """
+        N = np.array([np.sum(y != lb) for lb in labels ],dtype=float)+0.0001
+        falses_detections = dets != y
+        n_fa=np.array([np.sum((falses_detections) & (y == lb)) for lb in labels])
+        return n_fa/N
+
+    def save_detection_martix_plot(self,filename = 'det_mtrx.png'):
+        plt.close()
+        plt.imshow(self.det_matrix,interpolation = 'none',cmap = 'nipy_spectral')
+        plt.colorbar()
+        plt.xticks(self.labels,self.names,rotation=90)
+        plt.yticks(self.labels,self.names)
+        plt.title('column I, column J = Prob(Detecting AA of type I, given AA of type J ]')
+        ax = plt.gca()
+        ax.set_xticks(np.array(self.labels)+0.5, minor=True)
+        ax.set_yticks(np.array(self.labels)+0.5, minor=True)
+        ax.grid(which='minor', color='w', linestyle='-', linewidth=1)
+        plt.savefig(self.res_folder+filename)
+
+    def save_detection_graphs_one_run(self):
+        self.save_detection_martix_plot()
+
+        epoch_x_axis = range(len(self.det_acc_per_epoch))
+        for lb in self.labels:
+            file_name = '/res_'+self.labels_names[lb] +'.png'
+            det_rate_one_label = [x[lb]  for x in self.det_acc_per_epoch]
+            fa_rate_one_label = [x[lb]  for x in self.det_fa_per_epoch]
+
+            plt.subplot(2,1,1)
+            plt.title('Detection Accuracy' + self.labels_names[lb])
+            det_ln,=plt.plot(epoch_x_axis,det_rate_one_label,label='detection rate')
+            fa_ln,=plt.plot(epoch_x_axis,fa_rate_one_label,label='FA rate')
+            plt.xlabel('epoch')
+            plt.legend(handles=[det_ln, fa_ln],loc=3)
+            plt.grid = True
+
+            plt.subplot(2,1,2)
+            plt.title('Last Epoch SoftMax Output (Probability) ' + self.labels_names[lb])
+            det_ln,=plt.plot(self.prob_vs_output[lb]['prob_x'] ,self.prob_vs_output[lb]['det_y'],label='Prob of True')
+            fa_ln,=plt.plot(self.prob_vs_output[lb]['prob_x'] ,self.prob_vs_output[lb]['fa_y'],label='Prob of False')
+            plt.xlabel('Probability')
+            plt.legend(handles=[det_ln, fa_ln],loc=3)
+            plt.grid = True
+            plt.savefig(self.res_folder+file_name)
+            plt.close()
+

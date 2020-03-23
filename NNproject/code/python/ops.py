@@ -19,6 +19,18 @@ def conv2d(input_, output_dim,
 
         return conv
 
+def conv3d(input_, output_dim=None, k_dwh=None,  d_dwh=None, pad='NONE', name="conv3d" ,stddev=0.02, ):
+
+    with tf.variable_scope(name):
+
+        w = tf.get_variable('w', [k_dwh[0], k_dwh[1], k_dwh[2], input_.get_shape()[-1], output_dim],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+        conv = tf.nn.conv3d(input_, w, strides=[1, d_dwh[0], d_dwh[1],d_dwh[2], 1], padding=pad)
+        biases = tf.get_variable('biases', [output_dim], initializer=tf.constant_initializer(10.0))
+        conv = tf.reshape(tf.nn.bias_add(conv, biases), conv.get_shape())
+
+        return conv
+
 def de_conv(input_, output_shape,
              k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
              name="deconv2d", with_w=False):
@@ -48,6 +60,24 @@ def de_conv(input_, output_shape,
         else:
 
             return deconv
+
+def de_conv3(input_, output_shape, k_dwh=None,  d_dwh=None, stddev=0.02, name="deconv3d", pad = 'VALID', with_w=False):
+
+    with tf.variable_scope(name):
+        # filter : [height, width, output_channels, in_channels]
+        w = tf.get_variable('w', [k_dwh[0], k_dwh[1], k_dwh[2], output_shape[-1], input_.get_shape()[-1]],
+                            initializer=tf.random_normal_initializer(stddev=stddev))
+        deconv = tf.nn.conv3d_transpose(input_, w, output_shape=output_shape, strides=[1, d_dwh[0], d_dwh[1],d_dwh[2], 1],padding=pad)
+
+
+        biases = tf.get_variable('biases', [output_shape[-1]], initializer=tf.constant_initializer(10.0))
+        deconv = tf.reshape(tf.nn.bias_add(deconv, biases), deconv.get_shape())
+
+        if with_w:
+            return deconv, w, biases
+        else:
+            return deconv
+
 
 def fully_connect(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=False):
   shape = input_.get_shape().as_list()

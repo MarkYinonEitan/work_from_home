@@ -20,6 +20,7 @@ reload(dataset_loader)
 from dataset_loader import read_list_file, get_file_names,VX_FILE_SUFF
 from dataset_loader import VOX_SIZE, RESOLUTION,NBOX_IN, N_SAMPLS_FOR_1V3
 
+base_data_folder = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/"
 
 
 
@@ -74,9 +75,15 @@ def calc_LCC(pdb_id,map_id,grid3D):
     #simulate map
     runCommand('molmap #{} {}  modelId {}'.format(pdb_id,res_for_simulation,sim_map_id))
     #calc_LCC
-    runCommand('vop localCorrelation  #{} #{} windowSize {} subtractMean true  modelId {} '.\
+    runCommand('vop localCorrelation  #{} #{} windowSize {}  modelId {} '.\
                        format(sim_map_id,map_id,NBOX_IN,lcc_map_id))
     lcc_mtrx = map_to_matrix(lcc_map_id,grid3D)
+    min_lcc = min(0,np.min(lcc_mtrx))
+    lcc_mtrx = lcc_mtrx- min_lcc
+
+    lcc_mtrx = lcc_mtrx-np.mean(lcc_mtrx)
+    lcc_mtrx = np.greater(lcc_mtrx,0.0)*1.0
+
     #get points above mean
     lcc_mtrx[:(NBOX_IN+1)/2,:,:]=0.0
     lcc_mtrx[-(NBOX_IN+1)/2:,:,:]=0.0
@@ -84,11 +91,7 @@ def calc_LCC(pdb_id,map_id,grid3D):
     lcc_mtrx[:,-(NBOX_IN+1)/2:,:]=0.0
     lcc_mtrx[:,:,:(NBOX_IN+1)/2]=0.0
     lcc_mtrx[:,:,-(NBOX_IN+1)/2:]=0.0
-    lcc_mtrx = lcc_mtrx-np.mean(lcc_mtrx)
 
-    #
-    lcc_mtrx = lcc_mtrx-np.mean(lcc_mtrx)
-    lcc_mtrx = np.greater(lcc_mtrx,0.0)*1.0
     return lcc_mtrx
 
 
@@ -209,7 +212,6 @@ def create_database(input_folder, output_folder, list_file):
 
 
 def create_synth_data_res6():
-    base_data_folder = "/specific/netapp5_2/iscb/wolfson/Mark/data/NNcourse_project/data/"
     list_file = base_data_folder + '/res6/synth/list.txt'
     input_folder = base_data_folder + '/res6/synth/'
     output_folder = input_folder
@@ -218,7 +220,6 @@ def create_synth_data_res6():
     return
 
 def create_real_data_res6():
-    base_data_folder = "/specific/netapp5_2/iscb/wolfson/Mark/data/NNcourse_project/data/"
     list_file = base_data_folder + '/res6/exp/list.txt'
     input_folder = base_data_folder + '/res6/exp/'
     output_folder = input_folder

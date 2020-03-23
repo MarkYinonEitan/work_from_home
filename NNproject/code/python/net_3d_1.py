@@ -2,6 +2,10 @@ import os, time, sys, itertools
 import numpy as np
 import matplotlib
 import tensorflow as tf
+
+from ops import batch_normal, de_conv3, conv3d, fully_connect, lrelu
+
+
 #get current directory
 if '__file__' in locals():
     dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -17,121 +21,267 @@ from dataset_loader import N_CHANNELS, BATCH_SIZE,NBOX_OUT, NBOX_IN
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-batch_size = 10
 D_lr = 5e-5
 G_lr = 1e-4
-train_epoch = 20
-n_latent = 100
 alpha_1 = 5
 alpha_2 = 5e-4
 
-Input_Cube_Size = 8
-Output_Cube_Size = 5
-Nchannels = 4
+LATENT_DIM = 128
 
-root="./test1/"
+
+
+#class NNS():
+#    @stati
+
+
+class VAE_V1():
+    def __init__(self):
+
+        self.learn_rate_init = 0.03
+
+        #Learning Rate
+        self.global_step = tf.Variable(0, trainable=False)
+        self.add_global = self.global_step.assign_add(1)
+        self.new_learning_rate = tf.train.exponential_decay(self.learn_rate_init, global_step=self.global_step, decay_steps=10000,
+                                                   decay_rate=0.98)
+
+        self.log_vars = []
+
+        mp_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_OUT, NBOX_OUT, NBOX_OUT ,1])
+        vx_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_IN, NBOX_IN, NBOX_IN ,N_CHANNELS])
+        self.vx_real = vx_real
+        self.mp_real = mp_real
+
+
+        #encode
+        self.z_mean, self.z_sigm = Encode(self.vx_real)
+        self.kl_loss = KL_loss(self.z_mean, self.z_sigm)
+
+        # generator
+        self.ep = tf.random_normal(shape=[BATCH_SIZE, LATENT_DIM],stddev=0.1)
+        self.zp = tf.random_normal(shape=[BATCH_SIZE, LATENT_DIM])
+        self.z_x = tf.add(self.z_mean, tf.sqrt(tf.exp(self.z_sigm))*self.ep)
+
+        self.mp_fake = self.generate(self.z_x, reuse=False)
+        self.x_tilde = self.generate(self.zp, reuse=True)
+
+        self.reconstr_loss = tf.losses.mean_squared_error(self.mp_real, self.mp_fake)
+
+        #For encode
+        self.encode_loss = self.kl_loss/(128*BATCH_SIZE)
+
+        t_vars = tf.trainable_variables()
+
+        self.e_vars = [var for var in t_vars if 'e_' in var.name]
+        self.g_vars = [var for var in t_vars if 'gen_' in var.name]
+
+
+        self.generator_loss = self.reconstr_loss + self.encode_loss   # average over batch
+
+        self.log_vars.append(("e_loss", self.encode_loss))
+        self.log_vars.append(("g_loss", self.generator_loss))
+        self.log_vars.append(("reconstr_loss", self.reconstr_loss))
+        self.saver = tf.train.Saver()
+        for k, v in self.log_vars:
+            tf.summary.scalar(k, v)
+
+        #trainers
+        #VAE
+        self.trainer_VAE = tf.train.RMSPropOptimizer(learning_rate=self.new_learning_rate)
+        self.gradients_VAE = self.trainer_VAE.compute_gradients(self.generator_loss, var_list=self.e_vars+self.g_vars)
+        self.opti_VAE = self.trainer_VAE.apply_gradients(self.gradients_VAE)
+
+        self.dbg1 = self.encode_loss
+        self.dbg2 = self.reconstr_loss
+
+
+    def generate(self, z_var, reuse=False):
+
+        # 1st hidden layer
+        #conv1 = tf.layers.conv3d_transpose(x, 512, [2, 2, 2], strides=(2, 2, 2), padding='valid', use_bias=False,
+        #conv2 = tf.layers.conv3d_transpose(lrelu1, 256, [2, 2, 2], strides=(1, 1, 1), padding='valid', use_bias=False,
+        #conv3 = tf.layers.conv3d_transpose(lrelu2, 128, [3, 3, 3], strides=(1, 1, 1), padding='valid', use_bias=False,
+        #conv4 = tf.layers.conv3d_transpose(lrelu3, 1, [1, 1, 1], strides=(1, 1, 1), padding='valid', use_bias=False,
+
+        with tf.variable_scope('generator') as scope:
+
+            if reuse == True:
+                scope.reuse_variables()
+
+            #d1 = tf.nn.relu(batch_normal(fully_connect(z_var , output_size=8*8*256, scope='gen_fully1'), scope='gen_bn1', reuse=reuse))
+            d2 = tf.reshape(z_var, [BATCH_SIZE, 2, 2,  2, LATENT_DIM//8])
+
+            d2 = tf.nn.relu(batch_normal(de_conv3(d2 , output_shape=[BATCH_SIZE, 2, 2, 2, 128],  k_dwh=[1,1,1],  d_dwh=[1,1,1], name='gen_deconv2'), scope='gen_bn2', reuse=reuse))
+
+            d3 = tf.nn.relu(batch_normal(de_conv3(d2, output_shape=[BATCH_SIZE, 4, 4, 4,128],  k_dwh=[1,1,1],  d_dwh=[2,2,2],name='gen_deconv3'), scope='gen_bn3', reuse=reuse))
+
+            d4 = tf.nn.relu(batch_normal(de_conv3(d3, output_shape=[BATCH_SIZE, 5, 5, 5,128], k_dwh=[2,2,2],  d_dwh=[1,1,1], name='gen_deconv4'), scope='gen_bn4', reuse=reuse))
+            d5 = de_conv3(d4, output_shape=[BATCH_SIZE, 5, 5, 5,1],  k_dwh=[1,1,1],  d_dwh=[1,1,1],name='gen_deconv5')
+
+            return tf.nn.tanh(d5)
+
+
+class ENC_V1():
+    def __init__(self):
+
+        self.learn_rate_init = 0.03
+
+
+        #Learning Rate
+        self.global_step = tf.Variable(0, trainable=False)
+        self.add_global = self.global_step.assign_add(1)
+        self.new_learning_rate = tf.train.exponential_decay(self.learn_rate_init, global_step=self.global_step, decay_steps=10000,
+                                                   decay_rate=0.98)
+
+
+        self.log_vars = []
+
+        mp_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_OUT, NBOX_OUT, NBOX_OUT ,1])
+        vx_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_IN, NBOX_IN, NBOX_IN ,N_CHANNELS])
+        self.vx_real = vx_real
+
+
+        #encode
+        self.z_mean, self.z_sigm = Encode(self.vx_real)
+        self.kl_loss = KL_loss(self.z_mean, self.z_sigm)
+
+        #For encode
+        self.encode_loss = self.kl_loss/(128*BATCH_SIZE)
+
+        t_vars = tf.trainable_variables()
+
+        self.log_vars.append(("e_loss", self.encode_loss))
+
+        self.e_vars = [var for var in t_vars if 'e_' in var.name]
+        self.saver = tf.train.Saver()
+        for k, v in self.log_vars:
+            tf.summary.scalar(k, v)
+
+        #trainers
+        self.trainer_E = tf.train.RMSPropOptimizer(learning_rate=self.new_learning_rate)
+        self.gradients_E = self.trainer_E.compute_gradients(self.encode_loss, var_list=self.e_vars)
+        self.opti_E = self.trainer_E.apply_gradients(self.gradients_E)
+
+
+def KL_loss( mu, log_var):
+    return -0.5 * tf.reduce_sum(1 + log_var - tf.pow(mu, 2) - tf.exp(log_var))
+
+def Encode(x):
+
+    with tf.variable_scope('encode', reuse = tf.AUTO_REUSE) as scope:
+
+        conv1 = tf.nn.relu(batch_normal(conv3d(x, output_dim=32, k_dwh=[1, 1, 1],  d_dwh=(1, 1, 1),  pad='SAME', name='e_c1'), scope='e_bn1'))
+        conv2 = tf.nn.relu(batch_normal(conv3d(conv1, output_dim=128, k_dwh=[3, 3, 3],  d_dwh=(1, 1, 1), pad='VALID',name='e_c2'), scope='e_bn2'))
+        conv3 = tf.nn.relu(batch_normal(conv3d(conv2 , output_dim=256,k_dwh=[2, 2, 2],  d_dwh=(1, 1, 1), pad='VALID', name='e_c3'), scope='e_bn3'))
+
+        conv3 = tf.reshape(conv3, [BATCH_SIZE, -1])
+        fc1 = tf.nn.relu(batch_normal(fully_connect(conv3, output_size=256, scope='e_f1'), scope='e_bn4'))
+        z_mean = fully_connect(fc1 , output_size=LATENT_DIM, scope='e_f2')
+        z_sigma = fully_connect(fc1, output_size=LATENT_DIM, scope='e_f3')
+
+        return z_mean, z_sigma
 
 class DISC_V1():
     def __init__(self):
 
-        x = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_OUT, NBOX_OUT, NBOX_OUT ,1])
-        x_label = tf.placeholder(tf.float32, shape = [BATCH_SIZE,1,1,1,1])
-        keep_prob = tf.placeholder(dtype=tf.float32)
-        isTrain = tf.placeholder(dtype=tf.bool)
+        self.learn_rate_init = 0.03
+
+
+        #Learning Rate
+        self.global_step = tf.Variable(0, trainable=False)
+        self.add_global = self.global_step.assign_add(1)
+        self.new_learning_rate = tf.train.exponential_decay(self.learn_rate_init, global_step=self.global_step, decay_steps=10000,
+                                                   decay_rate=0.98)
+
+
+        d_scale_factor = 0.25
+
+        self.log_vars = []
+
+
+
+        mp_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_OUT, NBOX_OUT, NBOX_OUT ,1])
+        mp_fake = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_OUT, NBOX_OUT, NBOX_OUT ,1])
+
+        vx_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_IN, NBOX_IN, NBOX_IN ,N_CHANNELS])
+        vx_fake = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_IN, NBOX_IN, NBOX_IN , N_CHANNELS])
+
         # inputs
-        self.x = x
-        self.x_label = x_label
-        self.keep_prob = keep_prob
-        self.isTrain = isTrain
+        self.mp_real = mp_real
+        self.mp_fake = mp_fake
+
+        self.vx_real = vx_real
+        self.vx_fake = vx_fake
+
+        self.mp_random = tf.random_normal(shape=self.mp_real.get_shape())
+        self.vx_random = tf.random_normal(shape=self.vx_real.get_shape())
 
         #networks
-        self.disc = disc_v0(x, isTrain )
-        self.disc_loss = disc_loss(self.disc, x_label)
-
-        T_vars = tf.trainable_variables()
-        D_vars = [var for var in T_vars if var.name.startswith('discriminator')]
-        self.T_vars = T_vars
-        self.D_vars = D_vars
-        clip = [p.assign(tf.clip_by_value(p, -0.5, 0.5)) for p in D_vars]
-        self.clip = clip
-
-        # optimizer for each network
-        with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            D_optim = tf.train.RMSPropOptimizer(1).minimize(self.disc_loss["loss"], var_list=D_vars)
-            self.D_optim = D_optim
+        self.l_x,  self.D_pro_logits = self.discriminate(self.mp_real,self.vx_real, False)
+        self.l_x_tilde, self.De_pro_tilde = self.discriminate(self.mp_random,self.vx_random,True)
+        _, self.G_pro_logits = self.discriminate(self.mp_fake,self.vx_fake, True)
 
 
 
-def disc_loss(disc, x_label):
+        self.D_real_loss = tf.reduce_mean(\
+                            tf.nn.sigmoid_cross_entropy_with_logits(\
+                            labels=tf.ones_like(self.D_pro_logits)- d_scale_factor ,logits=self.D_pro_logits))
+        self.D_fake_loss = tf.reduce_mean(\
+                            tf.nn.sigmoid_cross_entropy_with_logits(\
+                            labels=tf.zeros_like(self.G_pro_logits), logits=self.G_pro_logits))
+        self.D_tilde_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(self.De_pro_tilde), logits=self.De_pro_tilde))
 
-    x = tf.squeeze(disc["o"])
-    y = tf.squeeze(x_label)
-    y_h = tf.one_hot(tf.to_int32(y),2)
+        self.D_loss = self.D_fake_loss + self.D_real_loss + self.D_tilde_loss
+
+        t_vars = tf.trainable_variables()
 
 
-    pred = tf.argmax(x)
-    #accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+        self.log_vars.append(("discriminator_loss", self.D_loss))
+
+        self.d_vars = [var for var in t_vars if 'dis' in var.name]
+        self.saver = tf.train.Saver()
+        for k, v in self.log_vars:
+            tf.summary.scalar(k, v)
+
+        #trainers
+        self.trainer_D = tf.train.RMSPropOptimizer(learning_rate=self.new_learning_rate)
+        self.gradients_D = self.trainer_D.compute_gradients(self.D_loss, var_list=self.d_vars)
+        self.opti_D = self.trainer_D.apply_gradients(self.gradients_D)
 
 
-    lgts = x;
-    d_loss = {}
-    d_loss["loss"] = tf.losses.sigmoid_cross_entropy(multi_class_labels=y_h,logits=lgts)
-    d_loss["acc"] = d_loss["loss"]
-    d_loss["x"] = x
-    d_loss["y"] = y
-    return d_loss
 
+    def discriminate(self, mp, vx, reuse=False):
+        paddings =  tf.constant([[0,0],
+                                 [(NBOX_IN-NBOX_OUT)//2,(NBOX_IN-NBOX_OUT)//2],\
+                                 [(NBOX_IN-NBOX_OUT)//2,(NBOX_IN-NBOX_OUT)//2],\
+                                 [(NBOX_IN-NBOX_OUT)//2,(NBOX_IN-NBOX_OUT)//2],\
+                                 [0,0]])
+        mp_pad = tf.pad(mp,paddings,mode='CONSTANT')
+        x_var= tf.concat([vx, mp_pad], 4)
+
+        with tf.variable_scope("discriminator") as scope:
+
+            if reuse:
+                scope.reuse_variables()
+
+            conv1 = tf.nn.relu(conv3d(x_var, output_dim=32, k_dwh=[1, 1, 1],  d_dwh=(1, 1, 1), pad='SAME', name='dis_conv1'))
+            conv2= tf.nn.relu(batch_normal(conv3d(conv1, output_dim=32,k_dwh=[3, 3, 3],  d_dwh=(1, 1, 1), pad='VALID', name='dis_conv2'), scope='dis_bn1', reuse=reuse))
+            conv3= tf.nn.relu(batch_normal(conv3d(conv2, output_dim=32,k_dwh=[2, 2, 2],  d_dwh=(1, 1, 1), pad='VALID', name='dis_conv3'), scope='dis_bn2', reuse=reuse))
+            conv4 = conv3d(conv3, output_dim=128,k_dwh=[2, 2, 2],  d_dwh=(2, 2, 2),pad='VALID', name='dis_conv4')
+            middle_conv = conv4
+            conv4= tf.nn.relu(batch_normal(conv4, scope='dis_bn3', reuse=reuse))
+            conv4= tf.reshape(conv4, [BATCH_SIZE, -1])
+
+            fl = tf.nn.relu(batch_normal(fully_connect(conv4, output_size=32, scope='dis_fully1'), scope='dis_bn4', reuse=reuse))
+            output = fully_connect(fl , output_size=1, scope='dis_fully2')
+
+            return middle_conv, output
 
 def lrelu(x, th=0.2):
     return tf.maximum(th * x, x)
 
 
-def encoder(x, keep_prob=0.5, isTrain=True):
-    with tf.variable_scope("encoder", reuse=tf.AUTO_REUSE):  #B*9*9*9*5
-        enc={}
-
-        conv1 = tf.layers.conv3d(x, 128, [2, 2, 2], strides=(1, 1, 1), padding='same', kernel_initializer=tf.contrib.layers.xavier_initializer())  # 32 * 32 * 128
-        lrelu1 = tf.nn.elu(conv1)
-        enc["c1"] = conv1
-        enc["l1"] = lrelu1
-        enc["out1_shape"] = [BATCH_SIZE,9,9,9,128]
-
-        conv2 = tf.layers.conv3d(lrelu1, 256, [4, 4, 4], strides=(2, 2, 2), padding='same', kernel_initializer=tf.contrib.layers.xavier_initializer())  # 16 * 16 *256
-        lrelu2 = tf.nn.elu(tf.layers.batch_normalization(conv2, training=isTrain))
-        enc["c2"] = conv2
-        enc["l2"] = lrelu2
-        enc["out2_shape"] = [BATCH_SIZE,5,5,5,256]
-
-        conv3 = tf.layers.conv3d(lrelu2, 512, [4, 4, 4], strides=(2, 2, 2), padding='same', kernel_initializer=tf.contrib.layers.xavier_initializer())  # 8 * 8 * 512
-        lrelu3 = tf.nn.elu(tf.layers.batch_normalization(conv3, training=isTrain))
-        enc["c3"] = conv3
-        enc["l3"] = lrelu3
-        enc["out3_shape"] = [BATCH_SIZE,3,3,3,512]
-
-        conv4 = tf.layers.conv3d(lrelu3, 100, [3, 3, 3], strides=(3, 3, 3), padding='same', kernel_initializer=tf.contrib.layers.xavier_initializer())  # 4 * 4 * 1024
-        lrelu4 = tf.nn.elu(tf.layers.batch_normalization(conv4, training=isTrain))
-        enc["c4"] = conv4
-        enc["l4"] = lrelu4
-        enc["out4shape"] = [BATCH_SIZE,1,1,1,100]
-
-        #conv5 = tf.layers.conv3d(lrelu3, 32, [4, 4, 4], strides=(1, 1, 1), padding='valid', kernel_initializer=tf.contrib.layers.xavier_initializer())  # 1 * 1 * 32
-        #lrelu5 = tf.nn.elu(tf.layers.batch_normalization(conv5, training=isTrain))
-
-        x = tf.nn.dropout(lrelu3, keep_prob)
-        x = tf.contrib.layers.flatten(x)
-        z_mu = tf.layers.dense(x, units=n_latent)
-        z_sig = 0.5 * tf.layers.dense(x, units=n_latent)
-        epsilon = tf.random_normal(tf.stack([tf.shape(x)[0], n_latent]))
-        z = z_mu + tf.multiply(epsilon, tf.exp(z_sig))
-
-        enc["z"]=z
-        enc["z_shape"]=[BATCH_SIZE,n_latent]
-        enc["z_mu"]=z_mu
-        enc["z_mu_shape"]=[]
-        enc["z_sig"]=z_sig
-        enc["z_sigshape"]=[]
-
-        return enc
 
 
 def generator(x, isTrain=True):
@@ -175,55 +325,6 @@ def generator(x, isTrain=True):
 
         return gnr
 
-def disc_v0(x,isTrain = True):
-    with tf.variable_scope('discriminator', reuse=tf.AUTO_REUSE):  # (-1, 32, 32,, 32, 1)
-        x_f = tf.layers.Flatten()(x)
-        dsc={}
-
-
-        l1 = tf.contrib.layers.fully_connected(x_f, 2)
-        o = tf.math.sigmoid(l1)
-        dsc["o"] = o
-        dsc["logits"] = o
-
-        return dsc
-
-
-def discriminator(x, isTrain=True):
-    with tf.variable_scope('discriminator', reuse=tf.AUTO_REUSE):  # (-1, 32, 32,, 32, 1)
-        dsc={}
-        # 1st hidden layer
-        conv1 = tf.layers.conv3d(x, 128, [1, 1, 1], strides=(1, 1, 1), padding='same', use_bias=False, kernel_initializer=tf.contrib.layers.xavier_initializer())  # (-1, 16, 16, 16, 128)
-        lrelu1 = tf.nn.elu(conv1)
-        dsc["c1"] = conv1
-        dsc["l1"] = lrelu1
-        dsc["out1shape"] = [BATCH_SIZE,5,5,5,12]
-
-        # 2nd hidden layer
-        conv2 = tf.layers.conv3d(lrelu1, 256, [3, 3,3], strides=(1, 1, 1), padding='valid', use_bias=False, kernel_initializer=tf.contrib.layers.xavier_initializer())  # (-1, 8, 8, 8, 256)
-        lrelu2 = tf.nn.elu(tf.layers.batch_normalization(conv2, training=isTrain))
-        dsc["c2"] = conv2
-        dsc["l2"] = lrelu2
-        dsc["out2shape"] = [BATCH_SIZE,3,3,3,25]
-
-        # 3rd hidden layer
-        conv3 = tf.layers.conv3d(lrelu2, 512, [2, 2, 2], strides=(1, 1, 1), padding='valid', use_bias=False, kernel_initializer=tf.contrib.layers.xavier_initializer())  # (-1, 4, 4, 4, 512)
-        lrelu3 = tf.nn.elu(tf.layers.batch_normalization(conv3, training=isTrain))
-        dsc["c3"] = conv3
-        dsc["l3"] = lrelu3
-        dsc["out3shape"] = [BATCH_SIZE,2,2,2,512]
-
-        # output layer
-        conv4 = tf.layers.conv3d(lrelu3, 1, [2, 2, 2], strides=(2, 2, 2), padding='valid', use_bias=False, kernel_initializer=tf.contrib.layers.xavier_initializer())
-        dsc["c4"] = conv4
-        dsc["out4shape"] = [BATCH_SIZE,2,2,2,1]
-
-
-        o = tf.nn.relu(conv4)
-        dsc["o"] = o
-        dsc["logits"] = conv4
-
-        return dsc
 
 def get_net_graph(xx,yy,keep_prob,isTrain):
 

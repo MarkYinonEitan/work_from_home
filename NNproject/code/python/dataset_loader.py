@@ -12,8 +12,11 @@ VOX_SIZE = 2.0
 RESOLUTION = 6.0
 NBOX_IN = 9
 NBOX_OUT = 5
-N_SAMPLS_FOR_1V3 = 1.0/(5.0**3)
+N_SAMPLS_FOR_1V3 = 1.0/(2.0**3)
 N_CHANNELS = 5
+
+MEAN = 0.5
+SIGMA = MEAN/3.0
 
 BATCH_SIZE = 256
 
@@ -28,15 +31,26 @@ class TestBox():
                     axis =3)
         label = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
 
-        self.pdb_id  = pdb_id
+        f_sum = np.sum(feature, axis=3)
+        I = NBOX_IN//2+1
+        J = NBOX_IN//2+1
+        K = NBOX_IN//2+1
+        NN=3
+        f_sum = f_sum[I-NN//2:I+NN//2+1,J-NN//2:J+NN//2+1,K-NN//2:K+NN//2+1]
+
+        self.sigma = np.std(f_sum)
+        self.mean = np.mean(f_sum)
+
+        self.pdb_id  = p.pdb_id
         self.coords = p.ijk
         self.inputs = feature
-        self.out = None
         self.target = label
+        self.out = np.zeros(label.shape)
+
+        self.p = p
         return
 
 def getbox(mp,I,J,K,NN):
-
     return mp[I-NN//2:I+NN//2+1,J-NN//2:J+NN//2+1,K-NN//2:K+NN//2+1,np.newaxis]
 
 class MolData():
@@ -59,6 +73,11 @@ class DataPoint():
         self.vx_dict = vx_dict
         self.pdb_id = pdb_id
         self.is_real = is_real
+
+        out_map = getbox(self.out,self.ijk[0],self.ijk[1],self.ijk[2],NBOX_OUT)
+
+        self.mean = np.mean(out_map)
+        self.sigma = np.std(out_map)
 
 class EM_DATA_DISC_RANDOM():
 
@@ -91,10 +110,13 @@ class EM_DATA_DISC_RANDOM():
 def points_from_mols(mols, is_real = True):
     points=[]
     for ml in mols:
+
         all_coords = np.nonzero(ml.lcc)
         for i,j in enumerate(all_coords[0]):
             points.append(DataPoint(all_coords[0][i],all_coords[1][i],all_coords[2][i]\
             , ml.out, ml.vx, ml.pdb_id,is_real = is_real))
+        print("DEBUG points created")
+
     return points
 
 def generator_from_data_random(points_data):
@@ -106,19 +128,24 @@ def generator_from_data_random(points_data):
             else:
                 map_patch = np.random.randn(NBOX_OUT,NBOX_OUT,NBOX_OUT,1)
 
-            std = np.std(map_patch)
-            avg = np.mean(map_patch)
-            map_patch = (map_patch-avg)/std
-
+            map_patch = adjust_mean_std(map_patch)
             yield (map_patch,label)
     return gen
 
 def get_out_map(p):
     map_patch = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
-    std = np.std(map_patch)
-    avg = np.mean(map_patch)
-    map_patch = (map_patch-avg)/std
+    map_patch = adjust_mean_std(map_patch)
     return map_patch
+
+def get_inp_map(p):
+    feature = np.concatenate((getbox(p.vx_dict['C'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                getbox(p.vx_dict['O'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                getbox(p.vx_dict['N'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                getbox(p.vx_dict['S'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN),\
+                getbox(p.vx_dict['H'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN)),\
+                axis =3)
+
+    return feature
 
 def get_real_synth(p):
     if p.is_real:
@@ -138,9 +165,7 @@ def generator_from_data_real_synth(points_data):
             else:
                 label = np.zeros([1,1,1,1])
             map_patch = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
-            std = np.std(map_patch)
-            avg = np.mean(map_patch)
-            map_patch = (map_patch-avg)/std
+            map_patch = adjust_mean_std(map_patch)
 
             yield (map_patch,label)
     return gen
@@ -201,8 +226,10 @@ class EM_DATA():
         self.label_shape = [NBOX_OUT,NBOX_OUT,NBOX_OUT,1]
 
         self.train_dataset = tf.data.Dataset.from_generator(self.train_generator,\
-                        (tf.float32,tf.float32),(tf.TensorShape(self.feature_shape),tf.TensorShape(self.label_shape))).\
-                        batch(BATCH_SIZE).shuffle(buffer_size=100)
+                        (tf.float32,tf.float32),(tf.TensorShape(self.feature_shape),tf.TensorShape(self.label_shape)))
+        self.train_dataset = self.train_dataset.apply(tf.contrib.data.batch_and_drop_remainder(BATCH_SIZE))
+        self.train_dataset = self.train_dataset.shuffle(buffer_size=100)
+
         return
 
 def load_pdb_list(folder_name, pdb_list):
@@ -217,6 +244,21 @@ def load_pdb_list(folder_name, pdb_list):
             print("{} FAILED, Error : ".format(pdb_id, str(e)))
     return mols
 
+def adjust_mean_std(mp,sigma=SIGMA, mean=MEAN):
+    #zero average
+    mp = mp - np.mean(mp)
+    #1 std
+    s = np.std(mp)
+    if s>0.02:
+        mp = mp/s
+        mp = mp*SIGMA
+    #required avg
+    mp = mp+MEAN
+    return mp
+
+
+
+
 
 def generator_from_data(points_data):
     def gen():
@@ -228,9 +270,8 @@ def generator_from_data(points_data):
                         getbox(p.vx_dict['H'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN)),\
                         axis =3)
             label = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
-            std = np.std(label)
-            avg = np.mean(label)
-            label = (label  -avg)/std
+            label = adjust_mean_std(label)
+
 
             yield (feature,label)
     return gen
@@ -245,7 +286,8 @@ def generator_from_data_test(points_data):
                         getbox(p.vx_dict['H'],p.ijk[0],p.ijk[1],p.ijk[2],NBOX_IN)),\
                         axis =3)
             label = getbox(p.out,p.ijk[0],p.ijk[1],p.ijk[2],NBOX_OUT)
-            print("DEBUG 235")
+            label = adjust_mean_std(label)
+
             yield (feature,label)
     return gen
 

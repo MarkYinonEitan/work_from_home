@@ -58,6 +58,8 @@ def create_map(mtrx, vx_size, org = [0.0,0.0,0.0], name = 'Marik'):
     step = [vx_size,vx_size,vx_size]
     mtrx_1 = np.swapaxes(mtrx,2,0)
 
+    mtrx_1[np.where(mtrx_1==0)]=-1
+
     grid = Array_Grid_Data(mtrx_1, org, step, name = name)
     v = volume_from_grid_data(grid)
 
