@@ -12,6 +12,8 @@ from VolumeViewer import volume_list
 from Matrix import euler_xform
 import pickle
 import gzip
+import MarkChimeraUtils
+reload(MarkChimeraUtils)
 
 
 
@@ -294,6 +296,7 @@ class DBcreator(object):
         centers = []
         labels = []
         ref_data = []
+        rotamers_data = []
         for res_strct in all_res_list:
             lb =  self.label.calc_label_from(res_strct.type)
             if lb!=-1:
@@ -307,10 +310,11 @@ class DBcreator(object):
                 centers.append( np.asarray([x,y,z]))
                 labels.append(lb)
                 ref_data.append({"chainId":res_strct.id.chainId, "pos":res_strct.id.position, "pdb_id":pdb_id ,"CG_pos":(x,y,z) })
+                rotamers_data.append( MarkChimeraUtils.get_rotamer_angles(res_strct))
 
         print "DEBUG FILTER BOX 0 ", limits_pdb
         print "DEBUG FILTER BOX", len(all_res_list),len(centers),len(labels)
-        return centers,labels, ref_data
+        return centers,labels, ref_data, rotamers_data
 
     def calc_nones(self,centers,n):
         centers_arr = np.asarray(centers)
@@ -371,7 +375,7 @@ class DBcreator(object):
             file_name = self.file_name_prefix + mrc_file[:-4]+self.file_name_suffix
         file_to_save = self.target_folder+file_name
 
-        centers,labels, ref_data = self.calc_box_centers_and_labels_from_pdb(pdb_file,check_list = check_list)
+        centers,labels, ref_data, rotamers_data = self.calc_box_centers_and_labels_from_pdb(pdb_file,check_list = check_list)
         print "DEBUG 44", len(labels)
         if len(labels)==0:
             print "DEBUG NO RES' in the BOX"
@@ -392,56 +396,39 @@ class DBcreator(object):
         runCommand('close all')
         return
 
-    def centers_to_corners(self,centers,labels, ref_data):
+    def centers_to_corners(self,centers,labels, ref_data, rotamers_data):
         assert self.apix ==1.0
         c0 = np.asarray(centers)
 
-        c_corners = np.zeros((0,3))
-        l_corners = []
-        r_corners = []
-
         c_ddd = np.vstack((np.floor(c0[:,0]),np.floor(c0[:,1]),np.floor(c0[:,2]))).T
-        c_corners = np.concatenate((c_corners,c_ddd))
-        l_corners = l_corners+labels
-        r_corners = r_corners + ref_data
-
         c_ddu = np.vstack((np.floor(c0[:,0]),np.floor(c0[:,1]),np.ceil(c0[:,2]))).T
-        c_corners = np.concatenate((c_corners,c_ddu))
-        l_corners = l_corners+labels
-        r_corners = r_corners + ref_data
-
         c_dud = np.vstack((np.floor(c0[:,0]),np.ceil(c0[:,1]),np.floor(c0[:,2]))).T
-        c_corners = np.concatenate((c_corners,c_dud))
-        l_corners = l_corners+labels
-        r_corners = r_corners + ref_data
-
         c_duu = np.vstack((np.floor(c0[:,0]),np.ceil(c0[:,1]),np.ceil(c0[:,2]))).T
-        c_corners = np.concatenate((c_corners,c_duu))
-        l_corners = l_corners+labels
-        r_corners = r_corners + ref_data
-
         c_udd = np.vstack((np.ceil(c0[:,0]),np.floor(c0[:,1]),np.floor(c0[:,2]))).T
-        c_corners = np.concatenate((c_corners,c_udd))
-        l_corners = l_corners+labels
-        r_corners = r_corners + ref_data
-
         c_udu = np.vstack((np.ceil(c0[:,0]),np.floor(c0[:,1]),np.ceil(c0[:,2]))).T
-        c_corners = np.concatenate((c_corners,c_udu))
-        l_corners = l_corners+labels
-        r_corners = r_corners + ref_data
-
         c_uud = np.vstack((np.ceil(c0[:,0]),np.ceil(c0[:,1]),np.floor(c0[:,2]))).T
-        c_corners = np.concatenate((c_corners,c_uud))
-        l_corners = l_corners+labels
-        r_corners = r_corners + ref_data
-
         c_uuu = np.vstack((np.ceil(c0[:,0]),np.ceil(c0[:,1]),np.ceil(c0[:,2]))).T
-        c_corners = np.concatenate((c_corners,c_uuu))
-        l_corners = l_corners+labels
-        r_corners = r_corners + ref_data
+        c_corners = np.concatenate((c_ddd,c_ddu,c_dud,c_duu,c_udd,c_udu,c_uud,c_uuu))
+
+
+        labels_corners = []
+        ref_data_corners = []
+        rot_corners = []
+
+
+        for k in range (8):
+            for in_data in range(len(labels)):
+                labels_corners.append(copy.deepcopy(labels[in_data]))
+                ref_data_corners.append(copy.deepcopy(ref_data[in_data]))
+                rot_corners.append(copy.deepcopy(rotamers_data[in_data]))
 
         c_corners_list = [c_corners[k,:] for k in range(c_corners.shape[0])]
-        return c_corners_list,l_corners,r_corners
+        #correct positions
+
+        for k in range(len(c_corners_list)):
+            ref_data_corners[k]["box_center"] = c_corners_list[k]
+
+        return c_corners_list,labels_corners,ref_data_corners,rot_corners
 
     def calc_limits_xyz(self, centers_list):
         cent_arr = np.asarray(centers_list)
@@ -467,14 +454,15 @@ class DBcreator(object):
         file_to_save = self.target_folder+file_name
 
         #calc all boxes centers
-        centers_pdb,labels_pdb, ref_data_pdb = self.calc_box_centers_and_labels_from_pdb(pdb_file,check_list = self.use_list,limits_pdb = limits_pdb)
+        centers_pdb,labels_pdb, ref_data_pdb, rotamers_data = self.calc_box_centers_and_labels_from_pdb(pdb_file,check_list = self.use_list,limits_pdb = limits_pdb)
         print( "DEBUG 44", len(labels_pdb) ,mrc_file,limits_pdb )
         if len(labels_pdb)==0:
             print("DEBUG NO RES' in the BOX",mrc_file,limits_pdb )
             return
 
 
-        centers_corners,labels_corners, ref_data_corners = self.centers_to_corners(centers_pdb,labels_pdb, ref_data_pdb)
+        centers_corners,labels_corners, ref_data_corners, rotamers_corners = \
+        self.centers_to_corners(centers_pdb,labels_pdb, ref_data_pdb, rotamers_data)
 
         limits_xyz = self.calc_limits_xyz(centers_corners)
 
@@ -499,7 +487,8 @@ class DBcreator(object):
 
         pred_boxes,_= get_boxes(data_mtrx,box_centers_ijk,C,Mean0Sig1Normalization)
 
-        data_dict = [{"box":pred_boxes[i], "label":labels_corners[i],"ref_data":ref_data_corners[i]}  for i in range(len(pred_boxes))]
+        data_dict = [{"box":pred_boxes[i], "label":labels_corners[i],"ref_data":ref_data_corners[i], "rot_angles":rotamers_corners[i]} \
+         for i in range(len(pred_boxes))]
 
         with open(file_to_save,"wb") as f_s:
             pickle.dump(data_dict,f_s)

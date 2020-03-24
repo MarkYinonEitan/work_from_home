@@ -5,6 +5,13 @@ from VolumeViewer import volume_from_grid_data
 from VolumeViewer import active_volume
 from numpy import zeros, array, dot, linalg
 
+
+def get_rotamer_angles(res):
+
+    angles = numpy.array([[res.phi, res.psi, res.chi1, res.chi2, res.chi3, res.chi4]]).astype(float)
+    angles[numpy.isnan(angles)] = -999
+    return angles
+
 def get_object_by_id(id):
     all_objs = filter(lambda x:x.id==id, chimera.openModels.list())
     if len(all_objs)==1:

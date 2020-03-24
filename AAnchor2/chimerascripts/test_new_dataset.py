@@ -53,3 +53,13 @@ N_divide = 1
 limit_boxes      = dbcreator.get_regions(data_folder+input_pdb_file,N_divide)[0]
 
 dbc.create_class_db_corners(input_mrc_file, input_pdb_file, limits_pdb = limit_boxes, file_name_suffix = '_0.pkl' )
+
+f.close()
+f = open("/Users/markroza/Documents/work_from_home/data/AAnchor2/first_impl/DB_from_1yti_0.pkl",'r')
+dd = pickle.load(f)
+dd_test_corners = filter(lambda x: x["ref_data"]['pos']==102, dd)
+for x in dd_test_corners:
+	print(x["ref_data"]['pos'])
+	print(x["ref_data"]['CG_pos'])
+	print(x["ref_data"]['box_center'])
+	print(x["rot_angles"])
