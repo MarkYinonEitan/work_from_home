@@ -12,8 +12,8 @@ from glob import glob
 import tensorflow as tf
 
 
-utils_path = '/specific/netapp5_2/iscb/wolfson/Mark/git/work_from_home/AAnchor_dgx/pythoncode/utils/'
-nets_path = '/specific/netapp5_2/iscb/wolfson/Mark/git/work_from_home/AAnchor_dgx/pythoncode/nets/'
+utils_path = '/specific/netapp5_2/iscb/wolfson/Mark/git/work_from_home/AAnchor2/pythoncode/utils/'
+nets_path = '/specific/netapp5_2/iscb/wolfson/Mark/git/work_from_home/AAnchor2/pythoncode/nets/'
 sys.path.append(utils_path)
 sys.path.append(nets_path)
 
@@ -43,7 +43,7 @@ def train_network(inp_list_file, input_db_folder, out_folder, net_string, initia
     valid_data_files=[]
     for data_row in list:
         emd_name = data_row["emd_file"][:-4]
-        file_names = glob(input_db_folder+'*{}*.pkl.gz'.format(emd_name))
+        file_names = glob(input_db_folder+'*{}*.pkl'.format(emd_name))
         if data_row["train_test"]=="TEST":
             valid_data_files = valid_data_files+file_names
         if data_row["train_test"]=="TRAIN":
@@ -51,8 +51,8 @@ def train_network(inp_list_file, input_db_folder, out_folder, net_string, initia
 
     ntwrk = utils_project.get_net_by_string(net_string)
 
-    file_writer = tf.summary.create_file_writer(out_folder + "/metrics")
-    file_writer.set_as_default()
+    #file_writer = tf.summary.create_file_writer(out_folder + "/metrics")
+    #file_writer.set_as_default()
 
 
     na =NetworkAnalyser(ntwrk, res_folder=out_folder, train_files=train_data_files,valid_files=valid_data_files,initial_weight_file=initial_weight_file,mini_batch_size=MINI_BATCH_SIZE,labeling = LABELELING)

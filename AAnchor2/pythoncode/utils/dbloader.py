@@ -14,6 +14,8 @@ import threading
 import numpy as np
 import glob
 import timeit
+import sys
+import csv
 
 
 try:
@@ -82,48 +84,6 @@ def get_box_centers_for_detection(data_mtrx,filter_matrix,cbs=11):
     return box_centers_zipped
 
 
-#### Load the Data and Labels
-def save_det_labeled_5tuple_data(filename,data_mtrx,filter_matrix,C,centers,labels):
-    f = gzip.open(filename, "w")
-    pickle.dump((data_mtrx,filter_matrix,C,centers,labels), f)
-    f.close()
-    return
-
-def load_swap_labeled_5tuple_data(filename):
-    f = gzip.open(filename, 'rb')
-    mtrx_not_swapped,filter_matrix_not_swapped,C,centers,labels  = pickle.load(f,encoding="bytes")
-    f.close()
-    data_mtrx = np.swapaxes(mtrx_not_swapped,0,2)
-    filter_matrix = np.swapaxes(filter_matrix_not_swapped,0,2)
-    return data_mtrx,filter_matrix,C,centers,labels
-
-def save_class_5tuple_data(filename,boxes,centers,labels,centers_pdb,labels_pdb):
-    f = gzip.open(filename, "w")
-    pickle.dump((boxes,centers,labels,centers_pdb,labels_pdb), f)
-    f.close()
-    return
-
-def load_class_5tuple_data(f_names):
-    boxes =[]
-    centers=[]
-    labels=[]
-    centers_pdb=[]
-    labels_pdb=[]
-    k=0
-    for filename in f_names:
-        f = gzip.open(filename, 'rb')
-        boxes_1,centers_1,labels_1,centers_pdb_1,labels_pdb_1  = pickle.load(f)
-        f.close()
-        boxes = boxes+ boxes_1
-        centers = centers+centers_1
-        labels= labels+labels_1
-        centers_pdb = centers_pdb+centers_pdb_1
-        labels_pdb = labels_pdb+labels_pdb_1
-        print ("DEBUG 34: ",k, filename)
-        k=k+1
-
-    #convert labels to integers
-    return boxes,centers,labels,centers_pdb,labels_pdb
 
 
 class NoNormalization(object):
@@ -160,30 +120,61 @@ def get_boxes(data_mtrx,centers_ijk,C,normalization = Mean0Sig1Normalization,cbs
 
     return pred_boxes, centers
 
+
 def get_all_pdbs(data_folder):
     all_pdbs =[get_pdb_id(x)  for x in glob.glob1(data_folder,'*.pkl.gz')]
     return all_pdbs
 
-def load_train_data_to_dict(file_name_s, empty_dict,normalization = Mean0Sig1Normalization,cbs=11):
+
+def save_label_data_to_csv(labels_dict, csv_file):
+    csv_columns = list(labels_dict.keys())
+
+    with open(csv_file, 'w') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
+        writer.writeheader()
+        for data in labels_dict:
+            writer.writerow(data)
+    return
+
+def load_labels_to_dict(csv_file):
+    labels=[]
+    with open(csv_file) as fh:
+        rd = csv.DictReader(fh, delimiter=',')
+        for row in rd:
+            labels.append(rd)
+
+    return
+
+
+def load_train_data_to_dict(file_name_s, empty_dict):
     start = timeit.default_timer()
 
-    pred_boxes_all=[]
-    labels_all = []
+    all_data = []
     for data_file in file_name_s:
         # load data - valid
         try:
-            data_mtrx,filter_matrix,C,centers,labels = load_swap_labeled_5tuple_data(data_file)
+            with open(data_file) as f_in:
+                single_file_data = pickle.load(f_in,encoding="bytes")
+                all_data.append(single_file_data)
         except:
+            print ("Unexpected error:", sys.exc_info()[0])
             print ("DEBUG LOAD ", data_file , "UNLOADED")
             continue
-        box_centers_ijk = global_xyz_to_ijk(np.asarray(centers),C)
 
-        pred_boxes,_= get_boxes(data_mtrx,box_centers_ijk,C,normalization)
-        pred_boxes_all = pred_boxes_all+pred_boxes
-        labels_all = labels_all+labels
 
-    empty_dict["boxes"] = pred_boxes_all
-    empty_dict["labels"] = labels_all
+    empty_dict["boxes"] = [x["box"] for x in all_data]
+    empty_dict["labels"] = [x["label"] for x in all_data]
+
+    #add None Label
+    empty_dict["boxes"].append(empty_dict["boxes"][-1].shape)
+    empty_dict["boxes"].append(0)
+
+    print("DEBUG 23242", file_name_s)
+
+    print("DEBUG 3293892", len(all_data))
+    print("DEBUG 32938782", len(empty_dict["boxes"]))
+    print("DEBUG 3293892", len(empty_dict["labels"]))
+
 
     stop = timeit.default_timer()
 

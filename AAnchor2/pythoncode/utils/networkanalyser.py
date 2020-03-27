@@ -71,36 +71,6 @@ def save_results(res_data,train_data,rsobjct):
     return
 
 
-def load_train_in_parallel(train_file_names=None,train_data = None,valid_data=None,res_data =None, model=None,mini_epochs=5, mini_batch_size = 100, rsobjct=None):
-
-    thrds = []
-
-    res_dict = {'res':None}
-    train_load_dict = {"boxes":None,"labels":None}
-
-    if model !=None:
-        thr_train = threading.Thread(target = run_miniepochs, args=(model, train_data, valid_data, mini_epochs, mini_batch_size ,res_dict))
-        thrds.append(thr_train)
-
-    if rsobjct!=None and len(res_data)>1 :
-        thr_save_res = threading.Thread(target = save_results, args=(res_data,train_data,rsobjct))
-        thrds.append(thr_save_res)
-
-    if train_file_names!=None:
-        thr_load = threading.Thread(target = dbloader.load_train_data_to_dict, args=(train_file_names,train_load_dict))
-        thrds.append(thr_load)
-
-    for t in thrds:
-        t.start()
-    for t in thrds:
-        t.join()
-
-    res_data.append(res_dict['res'])
-    new_train_data = (train_load_dict["boxes"],train_load_dict["labels"])
-
-
-    return new_train_data, res_data
-
 
 class NetworkAnalyser:
     def __init__(self, net, res_folder=temp_folder, train_files=[],valid_files=[],initial_weight_file='nothing',mini_batch_size=100,max_valid_res = 1000000,labeling = LabelbyAAType):
@@ -113,69 +83,6 @@ class NetworkAnalyser:
         self.mini_batch_size=mini_batch_size
         self.max_valid_res = max_valid_res
         self.labeling = labeling
-        return
-
-    def train_network_par(self, N_epoch = 10, mini_epochs=5,pdbs_per_mini_epoch=200):
-        random.shuffle(self.train_files)
-        train_files_per_miniepoch = [self.train_files[x:x+pdbs_per_mini_epoch] for x in range(0,len(self.train_files),pdbs_per_mini_epoch)]
-
-        print("DEBUG 23",self.train_files )
-        print("DEBUG 121223",train_files_per_miniepoch )
-
-        #load firts train and valid set
-        train_load_dict = {}
-        dbloader.load_train_data_to_dict(train_files_per_miniepoch[0],train_load_dict)
-        train_data =  (train_load_dict["boxes"],train_load_dict["labels"])
-        td_features = np.reshape(train_data[0],(len(train_data[0]),11,11,11,1))
-        td_labels = to_categorical(train_data[1])
-        print ("First train set loaded", time.ctime())
-
-        valid_load_dict = {}
-        dbloader.load_train_data_to_dict(self.valid_files,valid_load_dict)
-        valid_data = (valid_load_dict["boxes"][:self.max_valid_res],valid_load_dict["labels"][:self.max_valid_res])
-        print ("Valid train loaded",time.ctime())
-
-        #label statistics
-        ua,uc = np.unique(train_data[1],return_counts=True)
-        train_data_stat={ua[x]:uc[x] for x in range(len(uc))}
-
-        res_data =[]
-        reslts = SingleNetResults(self.res_folder, self.labeling.get_labels_to_names_dict(),res_per_epoch=res_data, valid_data=valid_data,train_data_stat = train_data_stat)
-
-        model = self.net.get_compiled_net()
-        if os.path.exists(self.initial_weight_file):
-            model.load_weights(self.initial_weight_file)
-
-        print ("DEBUG First Run")
-        run_miniepochs(model, train_data, valid_data,mini_epochs, self.mini_batch_size, {})
-
-        for epoch in range(N_epoch):
-            random.shuffle(self.train_files)
-            train_files_per_miniepoch = [self.train_files[x:x+pdbs_per_mini_epoch] for x in range(0,len(self.train_files),pdbs_per_mini_epoch)]
-
-            init_weights = model.get_weights()
-            upd_weights = []
-            n_mini = 0;
-            for  train_files in train_files_per_miniepoch[0:]:
-                model.set_weights(init_weights)
-                new_train_data, new_res_data = load_train_in_parallel(train_file_names= train_files,train_data = train_data,valid_data=valid_data,res_data =res_data, model=model,mini_epochs=mini_epochs, mini_batch_size = self.mini_batch_size,rsobjct=reslts)
-                train_data = new_train_data
-                res_data = new_res_data
-                upd_weights.append(model.get_weights())
-                print ("EPOCH: MINIEPOCH of ALL",epoch,n_mini, "of",len(train_files_per_miniepoch))
-                n_mini +=1
-
-            #avereging weights
-            new_weights = list()
-            for lr_weight in zip(*upd_weights):
-                new_weights.append(np.mean(lr_weight,axis=0))
-            model.set_weights(new_weights)
-
-                # serialize weights to HDF5
-            fname = "weights_updated"
-            model.save_weights(reslts.res_folder + fname +".h5")
-
-
         return
 
 

@@ -40,8 +40,6 @@ TEMP_FOLDER =  data_folder  + '/temp/'
 DEFAULT_STEP_FOR_DETECTION = 2
 DEBUG_FILE = TEMP_FOLDER+'debug.txt'
 
-DEBUG_FILE = 'debug.txt'
-
 
 def get_regions(pdb_file,N):
 

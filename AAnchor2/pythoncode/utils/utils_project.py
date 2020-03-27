@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 
-nets_path = '/specific/netapp5_2/iscb/wolfson/Mark/git/work_from_home/AAnchor_dgx/pythoncode/nets/'
+nets_path = '/specific/netapp5_2/iscb/wolfson/Mark/git/work_from_home/AAnchor2/pythoncode/nets/'
 sys.path.append(nets_path)
 
 try:

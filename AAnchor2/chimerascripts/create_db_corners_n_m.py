@@ -68,7 +68,7 @@ def create_db_n_m_file(input_list_file, input_folder, output_folder, error_list_
             return
         print(n,m,k,creation_triples[k]["emd_file"],creation_triples[k]["pdb_file"],creation_triples[k]["limit_box"])
         try:
-            dbc.create_class_db_corners(creation_triples[k]["emd_file"], creation_triples[k]["pdb_file"], limits_pdb = creation_triples[k]["limit_box"], file_name_suffix = '_'+str(k)+'.pkl.gz' )
+            dbc.create_class_db_corners(creation_triples[k]["emd_file"], creation_triples[k]["pdb_file"], limits_pdb = creation_triples[k]["limit_box"], file_name_suffix = '_'+str(k)+'.pkl' )
         except Exception as e:
             with open(error_list_file,"a") as f:
                 d = out_list[-1]
