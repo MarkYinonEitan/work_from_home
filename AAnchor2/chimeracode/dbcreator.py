@@ -16,29 +16,27 @@ import MarkChimeraUtils
 reload(MarkChimeraUtils)
 
 
+cur_pass = os.path.realpath(__file__)
 
-if '__file__' in locals():
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-else:
-    dir_path = os.getcwd()
-utils_path = dir_path + '/../pythoncode/utils/'
+utils_path = cur_pass + '/../pythoncode/utils/'
+chimera_path = cur_pass + '/../chimeracode/'
 sys.path.append(utils_path)
+sys.path.append(chimera_path)
 
 
 from kdtree import KDTree4
 from process_rotamers_data import read_rotamers_data_text_file
 from process_rotamers_data import get_pdb_id
 import dbloader
-from dbloader import LabelbyAAType, save_class_5tuple_data,save_det_labeled_5tuple_data
+from dbloader import LabelbyAAType
 from dbloader import Mean0Sig1Normalization, NoNormalization, global_xyz_to_ijk, get_boxes
 
 data_folder  = '/specific/netapp5_2/iscb/wolfson/Mark/data/AAnchor/'
 defoult_rotamers_file_name = data_folder  + '/rotamersdata/DatasetForBBDepRL2010.txt'
 DEFAULT_DIST_THRESHOLD = 1.5
-DEFAULT_NONES_RATIO = 0.3
 TEMP_FOLDER =  data_folder  + '/temp/'
 DEFAULT_STEP_FOR_DETECTION = 2
-DEBUG_FILE = TEMP_FOLDER+'debug.txt'
+DEBUG_FILE = 'debug.txt'
 
 
 def get_regions(pdb_file,N):
@@ -125,28 +123,6 @@ class EMmaps(object):
         assert err <00.0001,"Error is {}".format(err)
         return C
 
-    @staticmethod
-    def save_map_positions_as_pklgz(input_map,output_map):
-        #load
-        whole_map = open_volume_file(input_map,model_id = 17)[0]
-        #get_full matrix
-        data_mtrx = whole_map.full_matrix()
-        #calc_positions
-        Nx,Ny,Nz = data_mtrx.shape
-        x_pos = np.zeros((Nx,Ny,Nz))
-        y_pos = np.zeros((Nx,Ny,Nz))
-        z_pos = np.zeros((Nx,Ny,Nz))
-        for i in range(Nx):
-            for j in range(Ny):
-                for k in range(Nz):
-                    x,y,z = whole_map.ijk_to_global_xyz((i,j,k))
-                    x_pos[i,j,k] = x
-                    y_pos[i,j,k] = y
-                    z_pos[i,j,k] = z
-        f = gzip.open(output_map, "w")
-        pickle.dump((data_mtrx, x_pos,y_pos,z_pos), f)
-        f.close()
-        return
 
     @staticmethod
     def extract_3D_boxes(map_file,boxes_xyz,normalization,inst_for_debug = 'NONE'):
@@ -306,13 +282,26 @@ class DBcreator(object):
                 if ((z<limits_pdb[2][0]) or (z>limits_pdb[2][1])):
                     continue
                 centers.append( np.asarray([x,y,z]))
-                labels.append(lb)
-                ref_data.append({"chainId":res_strct.id.chainId, "pos":res_strct.id.position, "pdb_id":pdb_id ,"CG_pos":(x,y,z) })
-                rotamers_data.append( MarkChimeraUtils.get_rotamer_angles(res_strct))
+
+                lb_row={}
+                lb_row["label"] = lb
+                lb_row["chainId"] = res_strct.id.chainId
+                lb_row["pos"] = res_strct.id.position
+                lb_row["pdb_id"] = pdb_id
+                lb_row["CG_pos_X"] = x
+                lb_row["CG_pos_Y"] = y
+                lb_row["CG_pos_Z"] = z
+
+                rotamers_data = MarkChimeraUtils.get_rotamer_angles(res_strct)
+
+                for ky in list(rotamers_data.keys()):
+                    lb_row[ky] = rotamers_data[ky]
+
+                labels.append(lb_row)
 
         print "DEBUG FILTER BOX 0 ", limits_pdb
         print "DEBUG FILTER BOX", len(all_res_list),len(centers),len(labels)
-        return centers,labels, ref_data, rotamers_data
+        return centers, labels
 
     def calc_nones(self,centers,n):
         centers_arr = np.asarray(centers)
@@ -364,37 +353,8 @@ class DBcreator(object):
 
         return labels , kdt
 
-    def create_det_db_labeled(self,mrc_file,pdb_file,file_name = [],check_list=False ):
 
-        pdb_file_full_name = self.input_pdb_folder+pdb_file
-        mrc_file_full_name = self.mrc_maps_folder+mrc_file
-
-        if file_name==[]:
-            file_name = self.file_name_prefix + mrc_file[:-4]+self.file_name_suffix
-        file_to_save = self.target_folder+file_name
-
-        centers,labels, ref_data, rotamers_data = self.calc_box_centers_and_labels_from_pdb(pdb_file,check_list = check_list)
-        print "DEBUG 44", len(labels)
-        if len(labels)==0:
-            print "DEBUG NO RES' in the BOX"
-            return
-
-        #clear chimera
-        runCommand('close all')
-        #load map
-        init_map = open_volume_file(mrc_file_full_name,model_id=17)[0]
-        resampled_map = self.resample_map_with_chimera(init_map)
-        # calc positions and labels
-        data_mtrx = resampled_map.full_matrix()
-        #calc transformation
-        C = EMmaps.get_transformation_ijk_to_xyz(resampled_map)
-        #calc filter matrix
-        filter_matrix = np.ones(data_mtrx.shape)
-        save_det_labeled_5tuple_data(file_to_save,data_mtrx,filter_matrix,C,centers,labels)
-        runCommand('close all')
-        return
-
-    def centers_to_corners(self,centers,labels, ref_data, rotamers_data):
+    def centers_to_corners(self,centers,labels):
         assert self.apix ==1.0
         c0 = np.asarray(centers)
 
@@ -410,23 +370,22 @@ class DBcreator(object):
 
 
         labels_corners = []
-        ref_data_corners = []
-        rot_corners = []
+
 
 
         for k in range (8):
             for in_data in range(len(labels)):
                 labels_corners.append(copy.deepcopy(labels[in_data]))
-                ref_data_corners.append(copy.deepcopy(ref_data[in_data]))
-                rot_corners.append(copy.deepcopy(rotamers_data[in_data]))
 
         c_corners_list = [c_corners[k,:] for k in range(c_corners.shape[0])]
         #correct positions
 
         for k in range(len(c_corners_list)):
-            ref_data_corners[k]["box_center"] = c_corners_list[k]
+            labels_corners[k]["box_center_x"] = c_corners_list[k][0]
+            labels_corners[k]["box_center_y"] = c_corners_list[k][1]
+            labels_corners[k]["box_center_z"] = c_corners_list[k][2]
 
-        return c_corners_list,labels_corners,ref_data_corners,rot_corners
+        return c_corners_list,labels_corners
 
     def calc_limits_xyz(self, centers_list):
         cent_arr = np.asarray(centers_list)
@@ -441,26 +400,26 @@ class DBcreator(object):
 
         return ([x_min,x_max],[y_min,y_max],[z_min,z_max])
 
-    def create_class_db_corners(self,mrc_file,pdb_file,file_name = [],file_name_suffix = '.pkl',limits_pdb=([-10.0**6,10.0**6],[-10.0**6,10.0**6],[-10.0**6,10.0**6]) ):
+    def create_class_db_corners(self,mrc_file,pdb_file,file_name = [],file_name_suffix = '',limits_pdb=([-10.0**6,10.0**6],[-10.0**6,10.0**6],[-10.0**6,10.0**6]) ):
 
         print("DEBUG 3435",mrc_file,limits_pdb )
         pdb_file_full_name = self.input_pdb_folder+pdb_file
         mrc_file_full_name = self.mrc_maps_folder+mrc_file
 
+        print ("DEBUG 8832", file_name==[])
         if file_name==[]:
             file_name = self.file_name_prefix + mrc_file[:-4]+file_name_suffix
-        file_to_save = self.target_folder+file_name
+        file_name_pref = self.target_folder+file_name
 
         #calc all boxes centers
-        centers_pdb,labels_pdb, ref_data_pdb, rotamers_data = self.calc_box_centers_and_labels_from_pdb(pdb_file,check_list = self.use_list,limits_pdb = limits_pdb)
+        centers_pdb,labels_pdb= self.calc_box_centers_and_labels_from_pdb(pdb_file,check_list = self.use_list,limits_pdb = limits_pdb)
         print( "DEBUG 44", len(labels_pdb) ,mrc_file,limits_pdb )
         if len(labels_pdb)==0:
             print("DEBUG NO RES' in the BOX",mrc_file,limits_pdb )
             return
 
 
-        centers_corners,labels_corners, ref_data_corners, rotamers_corners = \
-        self.centers_to_corners(centers_pdb,labels_pdb, ref_data_pdb, rotamers_data)
+        centers_corners,labels_corners =   self.centers_to_corners(centers_pdb,labels_pdb)
 
         limits_xyz = self.calc_limits_xyz(centers_corners)
 
@@ -485,12 +444,7 @@ class DBcreator(object):
 
         pred_boxes,_= get_boxes(data_mtrx,box_centers_ijk,C,Mean0Sig1Normalization)
 
-        data_dict = [{"box":pred_boxes[i], "label":labels_corners[i],"ref_data":ref_data_corners[i], "rot_angles":rotamers_corners[i]} \
-         for i in range(len(pred_boxes))]
-
-        with open(file_to_save,"wb") as f_s:
-            pickle.dump(data_dict,f_s)
-
+        dbloader.save_label_data_to_csv(pred_boxes,labels_corners , file_name_pref)
 
         return
 
@@ -575,37 +529,3 @@ class DBcreator(object):
         assert resampled_map.id == 37
         runCommand('close 27')
         return resampled_map
-
-
-
-    def create_unlabeled_db(self,mrc_file_full_name,file_to_save,file_name_suffix = '.pkl.gz', map_thr_sigma = 1):
-
-
-        #'RESAMPLE with CHIMERA'
-        #clear chimera
-        runCommand('close all')
-        #load map
-        init_map = open_volume_file(mrc_file_full_name,model_id=17)[0]
-        resampled_map = self.resample_map_with_chimera(init_map)
-        # calc positions and labels
-        data_mtrx = resampled_map.full_matrix()
-
-
-
-        #calc transformation
-        C = EMmaps.get_transformation_ijk_to_xyz(resampled_map)
-        #calc filter matrix from sigma
-        filter_matrix = np.ones(data_mtrx.shape)
-        mean_all = np.mean(data_mtrx)
-        sigma_all = np.std(data_mtrx)
-        mean_weights = np.ones((11,11,11))/(11*11*11)
-        is_above_thr = data_mtrx>(mean_all+map_thr_sigma*sigma_all)
-        filter_matrix[is_above_thr] = 1
-
-
-        centers_ijk  = []
-        labels_ijk = []
-
-        save_det_labeled_5tuple_data(file_to_save,data_mtrx,filter_matrix,C,centers_ijk,labels_ijk)
-
-        return

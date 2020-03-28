@@ -11,10 +11,12 @@ from VolumeViewer import volume_from_grid_data
 from VolumeViewer import open_volume_file
 
 
-utils_path = '/specific/netapp5_2/iscb/wolfson/Mark/git/work_from_home/AAnchor_dgx/pythoncode/utils/'
-chimera_path = '/specific/netapp5_2/iscb/wolfson/Mark/git/work_from_home/AAnchor_dgx/chimeracode/'
+cur_pass = os.path.realpath(__file__)
+
+utils_path = cur_pass + '/../pythoncode/utils/'
+chimera_path = cur_pass + '/../chimeracode/'
 sys.path.append(utils_path)
-sys.path.append(chimera_path)
+
 
 import dbcreator
 from dbcreator import Mean0Sig1Normalization, DBcreator,BoxCenterAtCG
@@ -68,7 +70,7 @@ def create_db_n_m_file(input_list_file, input_folder, output_folder, error_list_
             return
         print(n,m,k,creation_triples[k]["emd_file"],creation_triples[k]["pdb_file"],creation_triples[k]["limit_box"])
         try:
-            dbc.create_class_db_corners(creation_triples[k]["emd_file"], creation_triples[k]["pdb_file"], limits_pdb = creation_triples[k]["limit_box"], file_name_suffix = '_'+str(k)+'.pkl' )
+            dbc.create_class_db_corners(creation_triples[k]["emd_file"], creation_triples[k]["pdb_file"], limits_pdb = creation_triples[k]["limit_box"], file_name_suffix = '_'+str(k) )
         except Exception as e:
             with open(error_list_file,"a") as f:
                 d = out_list[-1]

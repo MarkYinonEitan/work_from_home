@@ -7,10 +7,14 @@ from numpy import zeros, array, dot, linalg
 
 
 def get_rotamer_angles(res):
-
-    angles = numpy.array([[res.phi, res.psi, res.chi1, res.chi2, res.chi3, res.chi4]]).astype(float)
+    angle_names = ["phi", "psi", "chi1", "chi2", "chi3", "chi4"]
+    angles = numpy.array([res.phi, res.psi, res.chi1, res.chi2, res.chi3, res.chi4]).astype(float)
     angles[numpy.isnan(angles)] = -999
-    return angles
+    ang_dict = {}
+    for k in range(len(angle_names)):
+        ang_dict[angle_names[k]] = angles[k]
+
+    return ang_dict
 
 def get_object_by_id(id):
     all_objs = filter(lambda x:x.id==id, chimera.openModels.list())

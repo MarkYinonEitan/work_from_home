@@ -11,14 +11,12 @@ import os, sys
 import MarkChimeraUtils
 from chimera import runCommand
 
+cur_pass = os.path.realpath(__file__)
 
-if '__file__' in locals():
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-else:
-    dir_path = os.getcwd()
-utils_path = dir_path + '/../pythoncode/utils/'
+utils_path = cur_pass + '/../pythoncode/utils/'
+chimera_path = cur_pass + '/../chimeracode/'
 sys.path.append(utils_path)
-
+import dbloader
 
 
 def create_map_from_box(box, box_center=(0,0,0), apix = 1):
@@ -27,20 +25,27 @@ def create_map_from_box(box, box_center=(0,0,0), apix = 1):
     vmap = VolumeViewer.Volume(data)
     vmap.show()
 
-def visual_box_test(data_dict, pdb_file, half_bx_size=5):
+def visual_box_test(file_name, pdb_file, N = 5, half_bx_size=5):
 
     runCommand('close all')
 
+    data_dict = {}
+    dbloader.load_train_data_to_dict([file_name],data_dict)
+
     CA_list=[]
     prot = chimera.openModels.open(pdb_file,'PDB')[0]
+
+    in_show = set([np.random.choice(range(len(data_dict["boxes"]))) for x in range(N)])
+
     #load pdb file
-    for item in data_dict:
-        center = item["ref_data"]['CG_pos']
-        bx_not_sw = item["box"]
+    for it in in_show:
+        ref_data = data_dict["data"][it]
+        bx_not_sw = data_dict["boxes"][it]
+        center = (ref_data['box_center_x'], ref_data['box_center_y'],ref_data['box_center_z'])
         bx  = np.swapaxes(bx_not_sw,0,2)
         center_corrected = (center[0]-half_bx_size, center[1]-half_bx_size, center[2]-half_bx_size)
         create_map_from_box(bx, box_center=center_corrected, apix = 1)
-        res = MarkChimeraUtils.getResByNumInChain(prot, item["ref_data"]['chainId'],item["ref_data"]['pos'])
+        res = MarkChimeraUtils.getResByNumInChain(prot, ref_data['chainId'],ref_data['pos'])
         CA_list.append(res.findAtom('CA'))
 
     atoms_spec = MarkChimeraUtils.atomsList2spec(CA_list)

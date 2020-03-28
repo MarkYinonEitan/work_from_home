@@ -17,7 +17,6 @@ import timeit
 import sys
 import csv
 
-
 try:
   from scipy import ndimage
 except ImportError:
@@ -126,54 +125,73 @@ def get_all_pdbs(data_folder):
     return all_pdbs
 
 
-def save_label_data_to_csv(labels_dict, csv_file):
-    csv_columns = list(labels_dict.keys())
+def save_label_data_to_csv(boxes, labels_dict, file_name_pref):
 
-    with open(csv_file, 'w') as csvfile:
+    file_name_csv = file_name_pref + ".csv"
+    file_name_npy = file_name_pref + ".npy"
+
+    #save boxes
+    box_shape = boxes[0].shape
+    all_boxes = [np.reshape(x,( box_shape[0]*box_shape[1]*box_shape[2])) for x in boxes]
+    all_boxes_array = np.array(all_boxes)
+    np.save(file_name_npy,all_boxes_array)
+
+
+    #save labels to csv
+    csv_columns = list(labels_dict[0].keys())
+    with open(file_name_csv, 'w') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
         writer.writeheader()
         for data in labels_dict:
             writer.writerow(data)
     return
 
-def load_labels_to_dict(csv_file):
-    labels=[]
-    with open(csv_file) as fh:
-        rd = csv.DictReader(fh, delimiter=',')
-        for row in rd:
-            labels.append(rd)
-
-    return
-
 
 def load_train_data_to_dict(file_name_s, empty_dict):
+
+    number_fields = ["phi","box_center_y","chi2","chi3","chi1",\
+    "box_center_x","pos","chi4","label","CG_pos_X","CG_pos_Y",\
+    "CG_pos_Z","psi","box_center_z"]
+
+
+
     start = timeit.default_timer()
 
-    all_data = []
-    for data_file in file_name_s:
+    empty_dict["boxes"] = []
+    empty_dict["data"] =[]
+
+
+    for file_name_pref in file_name_s:
         # load data - valid
+        file_name_csv = file_name_pref + ".csv"
+        file_name_npy = file_name_pref + ".npy"
+
         try:
-            with open(data_file) as f_in:
-                single_file_data = pickle.load(f_in,encoding="bytes")
-                all_data.append(single_file_data)
+            single_box_data = np.load(file_name_npy)
+            box_size = np.int(np.round(single_box_data.shape[1]**(1./3)))
+            box_reshaped = [np.reshape(single_box_data[in_box,:], (box_size,box_size,box_size), order='C')  for in_box in range(single_box_data.shape[0])]
+            empty_dict["boxes"] = empty_dict["boxes"] + box_reshaped
+
+            with open(file_name_csv) as f_in:
+                    data_reader = csv.DictReader(f_in, delimiter=',')
+                    single_label_data = [x for x in data_reader]
+                    empty_dict["data"] = empty_dict["data"] + single_label_data
         except:
             print ("Unexpected error:", sys.exc_info()[0])
-            print ("DEBUG LOAD ", data_file , "UNLOADED")
+            print ("DEBUG LOAD ", file_name_pref , "UNLOADED")
             continue
 
+    for ky  in list(empty_dict["data"][0].keys()):
+        if ky in number_fields:
+            for row in empty_dict["data"]:
+                row[ky] = np.float(row[ky])
 
-    empty_dict["boxes"] = [x["box"] for x in all_data]
-    empty_dict["labels"] = [x["label"] for x in all_data]
+    empty_dict["labels"] = [x["label"] for k in empty_dict["data"]]
+
 
     #add None Label
-    empty_dict["boxes"].append(empty_dict["boxes"][-1].shape)
-    empty_dict["boxes"].append(0)
-
-    print("DEBUG 23242", file_name_s)
-
-    print("DEBUG 3293892", len(all_data))
-    print("DEBUG 32938782", len(empty_dict["boxes"]))
-    print("DEBUG 3293892", len(empty_dict["labels"]))
+    empty_dict["boxes"].append(np.zeros(empty_dict["boxes"][-1].shape))
+    empty_dict["labels"].append(0)
 
 
     stop = timeit.default_timer()

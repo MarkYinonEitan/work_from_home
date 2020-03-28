@@ -14,14 +14,12 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-if '__file__' in locals():
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-else:
-    dir_path = os.getcwd()
-utils_path = dir_path + '/../pythoncode/utils/'
-ch_path = dir_path + '/../chimeracode/'
+cur_pass = os.path.realpath(__file__)
+
+utils_path = cur_pass + '/../pythoncode/utils/'
+chimera_path = cur_pass + '/../chimeracode/'
 sys.path.append(utils_path)
-sys.path.append(ch_path)
+
 
 import kdtree
 reload(kdtree)
