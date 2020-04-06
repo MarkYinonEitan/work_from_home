@@ -25,7 +25,7 @@ from resultsplots import SingleNetResults
 temp_folder = dir_path +'/../data/temp/'
 
 def run_miniepochs(model, train_data, valid_data,mini_epochs, mini_batch_size, results_dict,
-class_weight= None, tensorboard_callbacks = []):
+class_weight= None):
     start = timeit.default_timer()
 
     td_features = np.reshape(train_data[0],(len(train_data[0]),11,11,11,1))
@@ -36,7 +36,7 @@ class_weight= None, tensorboard_callbacks = []):
     vd_features = np.reshape(valid_data[0],(len(valid_data[0]),11,11,11,1))
     vd_labels = to_categorical(valid_data[1])
 
-    model.fit(td_features,td_labels , validation_data = (vd_features,vd_labels),epochs=mini_epochs, batch_size=mini_batch_size, class_weight=class_weight , callbacks = tensorboard_callbacks)
+    model.fit(td_features,td_labels , validation_data = (vd_features,vd_labels),epochs=mini_epochs, shuffle = True, batch_size=mini_batch_size, class_weight=class_weight)
     rslts = model.predict(vd_features)
 
     results_dict['res'] = rslts
@@ -57,7 +57,6 @@ def save_results(res_data,train_data,rsobjct):
     for x in range(len(uc)) :
         ua[x] = round(ua[x])
         rsobjct.train_data_stat[ua[x]] = rsobjct.train_data_stat.get(ua[x],0) +uc[x]
-    print("DEBUG 2324", res_data)
     rsobjct.calc_results()
     rsobjct.save_data()
     rsobjct.save_detection_graphs_one_run()
@@ -86,7 +85,7 @@ class NetworkAnalyser:
         return
 
 
-    def train_network(self, N_epoch = 10, mini_epochs=5,pdbs_per_mini_epoch=200):
+    def train_network_miniepochs(self, N_epoch = 10, mini_epochs=5,pdbs_per_mini_epoch=200):
 
         model = self.net.get_compiled_net()
         if os.path.exists(self.initial_weight_file):
@@ -122,12 +121,55 @@ class NetworkAnalyser:
                 print ("Train set loaded", time.ctime())
                 #label statistics
                 res_dict = {'res':None}
-                run_miniepochs(model, train_data, valid_data,mini_epochs, self.mini_batch_size, res_dict, class_weight= self.net.get_class_weights(), callbacks =tensorboard_callbacks)
+                run_miniepochs(model, train_data, valid_data,mini_epochs, self.mini_batch_size, res_dict, class_weight= self.net.get_class_weights())
                 print ("EPOCH: MINIEPOCH of ALL",epoch,n_mini, "of",len(train_files_per_miniepoch))
                 res_data.append(res_dict['res'])
 
             save_results(res_data,train_data,reslts_obj)
             model.save_weights(reslts_obj.res_folder + "weights_updated" +'_'+str(epoch)+".h5")
+
+        return
+
+
+    def train_network(self, N_epoch = 50):
+
+        model = self.net.get_compiled_net()
+        if os.path.exists(self.initial_weight_file):
+            model.load_weights(self.initial_weight_file)
+            print("WEIGHTS LOADED")
+        print ("Model Initiated",time.ctime())
+
+
+        valid_load_dict = {}
+        dbloader.load_train_data_to_dict(self.valid_files,valid_load_dict)
+        valid_data = (valid_load_dict["boxes"][:self.max_valid_res],valid_load_dict["labels"][:self.max_valid_res])
+        print ("Valid train loaded",time.ctime())
+
+
+
+        train_load_dict = {}
+        dbloader.load_train_data_to_dict(self.train_files,train_load_dict)
+        train_data =  (train_load_dict["boxes"],train_load_dict["labels"])
+        td_features = np.reshape(train_data[0],(len(train_data[0]),11,11,11,1))
+        td_labels = to_categorical(train_data[1])
+        print ("Train set loaded", time.ctime())
+
+
+        res_data =[]
+        #load firts train and valid set
+        reslts_obj = SingleNetResults(self.res_folder, self.labeling.get_labels_to_names_dict(), valid_data = valid_data)
+
+
+
+        for epoch in range(N_epoch):
+            res_dict = {'res':None}
+            run_miniepochs(model, train_data, valid_data,5, self.mini_batch_size, res_dict, class_weight= self.net.get_class_weights())
+            print ("EPOCH",epoch , "of",N_epoch)
+
+            if N_epoch%10 ==0:
+                res_data.append(res_dict['res'])
+                save_results(res_data,train_data,reslts_obj)
+                model.save_weights(reslts_obj.res_folder + "weights_updated" +'_'+str(epoch)+".h5")
 
         return
 

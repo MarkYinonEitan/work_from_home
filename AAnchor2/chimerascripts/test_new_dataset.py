@@ -10,7 +10,7 @@ from VolumeViewer import volume_from_grid_data
 from VolumeViewer import open_volume_file
 
 import os
-cur_pass = os.path.realpath(__file__)
+cur_pass = os.path.dirname(os.path.realpath(__file__))
 
 utils_path = cur_pass + '/../pythoncode/utils/'
 chimera_path = cur_pass + '/../chimeracode/'
