@@ -43,7 +43,7 @@ def train_network(inp_list_file, input_db_folder, out_folder, net_string, initia
     valid_data_files=[]
     for data_row in list:
         emd_name = data_row["emd_file"][:-4]
-        file_names = glob(input_db_folder+'*{}*.pkl'.format(emd_name))
+        file_names = [x[:-4] for x in glob(input_db_folder+'*{}*.csv'.format(emd_name))]
         if data_row["train_test"]=="TEST":
             valid_data_files = valid_data_files+file_names
         if data_row["train_test"]=="TRAIN":
@@ -57,7 +57,7 @@ def train_network(inp_list_file, input_db_folder, out_folder, net_string, initia
 
     na =NetworkAnalyser(ntwrk, res_folder=out_folder, train_files=train_data_files,valid_files=valid_data_files,initial_weight_file=initial_weight_file,mini_batch_size=MINI_BATCH_SIZE,labeling = LABELELING)
 
-    na.train_network(N_epoch = N_epoch, mini_epochs=MINI_EPOCHS,pdbs_per_mini_epoch=PDBS_PER_MINI_EPOCH)
+    na.train_network(N_epoch = N_epoch)
 
 
 

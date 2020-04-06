@@ -16,7 +16,7 @@ import MarkChimeraUtils
 reload(MarkChimeraUtils)
 
 
-cur_pass = os.path.realpath(__file__)
+cur_pass = os.path.dirname(os.path.realpath(__file__))
 
 utils_path = cur_pass + '/../pythoncode/utils/'
 chimera_path = cur_pass + '/../chimeracode/'
@@ -202,7 +202,7 @@ class EMmaps(object):
 
 class DBcreator(object):
     def __init__(self, input_pdb_folder = TEMP_FOLDER, mrc_maps_folder = TEMP_FOLDER,target_folder = TEMP_FOLDER, file_name_prefix = 'DBfrom_', list_file_name=defoult_rotamers_file_name, apix=1.0, label = LabelbyAAType, box_center = BoxCenterAtCG,
-    normalization = NoNormalization, cubic_box_size = 11,dist_thr = DEFAULT_DIST_THRESHOLD, nones_ratio = DEFAULT_NONES_RATIO,step_for_detection = DEFAULT_STEP_FOR_DETECTION,debug_file=DEBUG_FILE,is_corners = False,        use_list = False ):
+    normalization = NoNormalization, cubic_box_size = 11,dist_thr = DEFAULT_DIST_THRESHOLD, step_for_detection = DEFAULT_STEP_FOR_DETECTION,debug_file=DEBUG_FILE,is_corners = False,        use_list = False ):
         """         """
         self.input_pdb_folder = input_pdb_folder+'/'
         self.mrc_maps_folder = mrc_maps_folder+'/'
@@ -216,7 +216,6 @@ class DBcreator(object):
         self.normalization = normalization
         self.cubic_box_size = cubic_box_size
         self.dist_thr = dist_thr
-        self.nones_ratio = nones_ratio
         self.step = step_for_detection
         self.debug_file = debug_file
         self.is_corners = is_corners
@@ -303,29 +302,7 @@ class DBcreator(object):
         print "DEBUG FILTER BOX", len(all_res_list),len(centers),len(labels)
         return centers, labels
 
-    def calc_nones(self,centers,n):
-        centers_arr = np.asarray(centers)
-        x_min = np.amin(centers_arr[:,0])
-        x_max = np.amax(centers_arr[:,0])
-        y_min = np.amin(centers_arr[:,1])
-        y_max = np.amax(centers_arr[:,1])
-        z_min = np.amin(centers_arr[:,2])
-        z_max = np.amax(centers_arr[:,2])
-
-        x_pos = np.round(np.random.uniform(x_min,x_max,n))
-        y_pos = np.round(np.random.uniform(y_min,y_max,n))
-        z_pos = np.round(np.random.uniform(z_min,z_max,n))
-
-        kdt = KDTree4(centers)
-
-
-        none_centers =[]
-        for ind in range(n):
-            center = np.asarray([x_pos[ind],y_pos[ind],z_pos[ind]])
-            if len(kdt.in_range(center,self.dist_thr)) == 0:
-                none_centers.append(center)
-        return none_centers
-
+    
     def box_from_box_center(self,x,y,z):
 
         cbs = self.cubic_box_size

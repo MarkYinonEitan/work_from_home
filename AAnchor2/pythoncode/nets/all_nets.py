@@ -141,20 +141,20 @@ class V5_Drop_Reg_2(object):
         #define network
         ## the network ## the network
         model = Sequential()
-        model.add(Conv3D(50, (3,3,3),input_shape=(11,11,11,1), kernel_regularizer=regularizers.l2(0.01), bias_regularizer=regularizers.l2(0.000001),kernel_initializer='random_uniform',bias_initializer='zeros'))
+        model.add(Conv3D(50, (3,3,3),input_shape=(11,11,11,1), kernel_regularizer=regularizers.l2(0.005), bias_regularizer=regularizers.l2(0.0001),kernel_initializer='random_uniform',bias_initializer='zeros'))
         model.add(Activation('relu'))
 
-        model.add(Conv3D(50, (2,2,2),kernel_regularizer=regularizers.l2(0.01),  bias_regularizer=regularizers.l2(0.000001),kernel_initializer='random_uniform',bias_initializer='zeros'))
+        model.add(Conv3D(50, (2,2,2),kernel_regularizer=regularizers.l2(0.005),  bias_regularizer=regularizers.l2(0.0001),kernel_initializer='random_uniform',bias_initializer='zeros'))
         model.add(Activation('relu'))
 
         model.add(MaxPooling3D(pool_size=(2, 2,2)))
 
         model.add(Flatten())
-        model.add(Dense(100,kernel_regularizer=regularizers.l2(0.01),   bias_regularizer=regularizers.l2(0.000001),kernel_initializer='random_uniform',bias_initializer='zeros'))
+        model.add(Dense(100,kernel_regularizer=regularizers.l2(0.005),   bias_regularizer=regularizers.l2(0.0001),kernel_initializer='random_uniform',bias_initializer='zeros'))
         model.add(Activation('relu'))
         model.add(Dropout(0.50))
 
-        model.add(Dense(21,kernel_regularizer=regularizers.l2(0.01),  bias_regularizer=regularizers.l2(0.000001),kernel_initializer='random_uniform',bias_initializer='zeros'))
+        model.add(Dense(21,kernel_regularizer=regularizers.l2(0.005),  bias_regularizer=regularizers.l2(0.0001),kernel_initializer='random_uniform',bias_initializer='zeros'))
         model.add(Activation('softmax'))
 
         # load weights into new model

@@ -14,7 +14,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-cur_pass = os.path.realpath(__file__)
+cur_pass = os.path.dirname(os.path.realpath(__file__))
 
 utils_path = cur_pass + '/../pythoncode/utils/'
 chimera_path = cur_pass + '/../chimeracode/'

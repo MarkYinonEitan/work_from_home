@@ -166,6 +166,8 @@ def load_train_data_to_dict(file_name_s, empty_dict):
         file_name_csv = file_name_pref + ".csv"
         file_name_npy = file_name_pref + ".npy"
 
+        print("DEBUG ", file_name_pref, len(file_name_s))
+
         try:
             single_box_data = np.load(file_name_npy)
             box_size = np.int(np.round(single_box_data.shape[1]**(1./3)))
@@ -186,12 +188,13 @@ def load_train_data_to_dict(file_name_s, empty_dict):
             for row in empty_dict["data"]:
                 row[ky] = np.float(row[ky])
 
-    empty_dict["labels"] = [x["label"] for k in empty_dict["data"]]
+    empty_dict["labels"] = [x["label"] for x in empty_dict["data"]]
 
 
     #add None Label
     empty_dict["boxes"].append(np.zeros(empty_dict["boxes"][-1].shape))
     empty_dict["labels"].append(0)
+    empty_dict["data"].append(empty_dict["data"][0])
 
 
     stop = timeit.default_timer()

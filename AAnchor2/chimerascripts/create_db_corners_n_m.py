@@ -11,14 +11,17 @@ from VolumeViewer import volume_from_grid_data
 from VolumeViewer import open_volume_file
 
 
-cur_pass = os.path.realpath(__file__)
+cur_pass = os.path.dirname(os.path.realpath(__file__))
 
 utils_path = cur_pass + '/../pythoncode/utils/'
 chimera_path = cur_pass + '/../chimeracode/'
 sys.path.append(utils_path)
-
+sys.path.append(chimera_path)
+print("DEBUG 739234343479", chimera_path)
 
 import dbcreator
+
+print("DEBUG 7392379", chimera_path)
 from dbcreator import Mean0Sig1Normalization, DBcreator,BoxCenterAtCG
 from dbloader import LabelbyAAType,Mean0Sig1Normalization, NoNormalization
 import utils_project
