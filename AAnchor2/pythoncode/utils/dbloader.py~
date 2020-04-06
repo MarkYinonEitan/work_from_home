@@ -1,0 +1,95 @@
+"""network3.py
+~~~~~~~~~~~~~~
+Class to work with datasets
+"""
+
+#### Libraries
+# Standard library
+import cPickle
+import gzip
+import os
+import time
+
+# Third-party libraries
+import numpy as np
+import theano
+import theano.tensor as T
+import glob
+from process_rotamers_data import read_rotamers_data_text_file
+from process_rotamers_data import get_mrc_file_name,get_pdb_id
+
+
+
+
+
+#### Main class used to construct and train networks
+class DBLoader(object):
+
+    def __init__(self, apix, res, data_folder=[]):
+        """Takes a list of `layers`, describing the network architecture, and
+        a value for the `mini_batch_size` to be used during training
+        by stochastic gradient descent.
+
+        """
+        if data_folder == []:
+            if '__file__' in locals():
+                dir_path = os.path.dirname(os.path.realpath(__file__))
+            else:
+                dir_path = os.getcwd()
+            data_folder = dir_path+'/../../data/' + '/rotamersdata/'+ 'DB' + '_res' +str(int(res*10))+'apix'+str(int(apix*10))+'/'
+        self.data_folder=data_folder
+        self.apix = apix
+        self.res = res
+        self.pdbs_to_files = {get_pdb_id(x): x for x in glob.glob1(self.data_folder,'*.pkl.gz')}
+        self.train_data_per_epoch = []
+        self.valid_data = []
+
+    def get_training_data_shared(self,mini_epoch):
+        pdbs = self.train_data_per_epoch[mini_epoch]
+        f_names = [self.pdbs_to_files[x] for x in pdbs]
+        return self.load_data_shared(f_names)
+    
+    def get_valid_data_shared(self):
+        return self.valid_data
+
+    def get_all_pdbs(self):
+        return self.pdbs_to_files.keys()
+
+
+    def get_all_filenames(self):
+        return self.pdbs_to_files.values()
+
+
+    def set_train_data(self, pdbs_mini_epoch):
+        self.N_mini_epochs = len(pdbs_mini_epoch)
+        self.train_data_per_epoch = pdbs_mini_epoch
+
+    def set_valid_data(self,list_of_pdbs):
+        self.valid_data = self.load_data_shared([self.pdbs_to_files[x] for x in list_of_pdbs])
+
+    def shared(self,data):
+        """Place the data into shared variables.  This allows Theano to copy
+        the data to the GPU, if one is available.
+
+        """
+        shared_x = theano.shared(
+            np.asarray(data[0], dtype=theano.config.floatX), borrow=True)
+        shared_y = theano.shared(
+            np.asarray(data[1], dtype=theano.config.floatX), borrow=True)
+        return shared_x, T.cast(shared_y, "int32")
+
+    #### Load the Data and Labels
+    def load_data_shared(self,filenames):
+        return self.shared(self.load_data(filenames))
+
+    #### Load the Data and Labels
+    def load_data(self,filenames):
+        training_data = [[],[]] # [ [data
+        for file_name in  filenames:
+            f = gzip.open(self.data_folder+file_name, 'rb')
+	    print "DEBUG 12", file_name, time.ctime(time.time())  
+            training_data_one_file,  _ = cPickle.load(f)
+            f.close()
+            training_data[0] = training_data[0]+training_data_one_file[0]
+            training_data[1] = training_data[1]+training_data_one_file[1]
+        return training_data

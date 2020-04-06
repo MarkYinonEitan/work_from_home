@@ -1,0 +1,81 @@
+import sys
+import os
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+import cPickle
+import gzip
+
+if '__file__' in locals():
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+else:
+    dir_path = os.getcwd()
+utils_path = dir_path + '../utils/'
+
+
+from process_rotamers_data import get_mrc_file_name, get_pdb_id
+from process_rotamers_data import read_rotamers_data_text_file
+
+def calc_detection(soft_max_probs):
+    det = np.argmax(soft_max_probs,axis=1)
+    return det
+
+def calc_detection_accuracy(dets, y,labels ):
+ 
+    N = np.array([sum(y == lb) for lb in labels ],dtype=float) +0.0001
+    true_detections = dets == y
+    n_det=np.array([sum((true_detections) & (y == lb)) for lb in labels])
+    det_acc = []
+    return n_det/N
+
+def calc_FA_rate(dets, y,labels):
+    """
+    False Alarm Rate = m/n
+    m - number of false positive detections
+    n - number  of samples of other labels
+    """
+    N = np.array([sum(y != lb) for lb in labels ],dtype=float)+0.0001
+    falses_detections = dets != y
+    n_fa=np.array([sum((falses_detections) & (y == lb)) for lb in labels])
+    return n_fa/N
+
+def detection_graphs_one_run(res_per_epoch, y, label_dict, folder_name ):
+    labels_to_keys = {v: k for k, v in label_dict.iteritems()}
+    labels = labels_to_keys.keys()
+    #detections
+    dets=[calc_detection(one_epoch_data) for one_epoch_data in res_per_epoch]
+    det_rate=[calc_detection_accuracy(det_one_epoch,y,labels) for det_one_epoch in dets]
+    fa_rate=[calc_FA_rate(det_one_epoch,y, labels) for det_one_epoch in dets]
+   
+    epoch_x_axis = range(len(res_per_epoch))
+    for lb in labels:
+        file_name = folder_name+'/res_'+labels_to_keys[lb] +'.png'
+        det_rate_one_label = [x[lb]  for x in det_rate]
+        fa_rate_one_label = [x[lb]  for x in fa_rate]
+
+        det_ln,=plt.plot(epoch_x_axis,det_rate_one_label,label='detection rate')
+        fa_ln,=plt.plot(epoch_x_axis,fa_rate_one_label,label='FA rate')
+        plt.xlabel('epoch')
+        plt.ylabel('%')
+        plt.title('Detection Accuracy' + labels_to_keys[lb])
+        plt.legend(handles=[det_ln, fa_ln])
+        plt.savefig(file_name)
+        plt.close()
+
+
+res_file_name = '/Users/macbookpro/Documents/rozSVN\/Projects/NNcryoEM/data/temp/res_for_plot.pkl.gz'
+
+#load file
+f = gzip.open(res_file_name, 'rb')
+ws,res_per_epoch_conv,res_per_epoch, valid_data_y   = cPickle.load(f)
+f.close()
+
+label_dict = {"ALA":1,"ARG":2,"ASN":3,"ASP":4,"CYS":5,"CYH":5,"CYD":5,
+    "GLN":6,"GLU":7,"GLY":8,"HIS":9,"ILE":10,
+    "LEU":11,"LYS":12,"MET":13,"PHE":14,"PRO":15,"TPR":15,"CPR":15,
+    "SER":16,"THR":17,"TRP":18,"TYR":19,"VAL":20,"NONE":0}
+
+res_folder = '/Users/macbookpro/Documents/rozSVN\/Projects/NNcryoEM/data/temp/'
+
+detection_graphs_one_run(res_per_epoch_conv, valid_data_y , label_dict, res_folder )
