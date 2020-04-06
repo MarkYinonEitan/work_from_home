@@ -17,11 +17,19 @@ reload(MarkChimeraUtils)
 
 
 cur_pass = os.path.realpath(__file__)
+gan_pass = cur_pass + '/../../AAcryo_from_boxes/'
 
 utils_path = cur_pass + '/../pythoncode/utils/'
 chimera_path = cur_pass + '/../chimeracode/'
 sys.path.append(utils_path)
 sys.path.append(chimera_path)
+gan_chimera_path = gan_pass+'/code/chimera/'
+sys.path.append(gan_chimera_path)
+gan_python_path = gan_pass+'/code/python/'
+sys.path.append(gan_python_path)
+from dataset_loader_gan import 
+
+
 
 
 from kdtree import KDTree4
@@ -303,28 +311,6 @@ class DBcreator(object):
         print "DEBUG FILTER BOX", len(all_res_list),len(centers),len(labels)
         return centers, labels
 
-    def calc_nones(self,centers,n):
-        centers_arr = np.asarray(centers)
-        x_min = np.amin(centers_arr[:,0])
-        x_max = np.amax(centers_arr[:,0])
-        y_min = np.amin(centers_arr[:,1])
-        y_max = np.amax(centers_arr[:,1])
-        z_min = np.amin(centers_arr[:,2])
-        z_max = np.amax(centers_arr[:,2])
-
-        x_pos = np.round(np.random.uniform(x_min,x_max,n))
-        y_pos = np.round(np.random.uniform(y_min,y_max,n))
-        z_pos = np.round(np.random.uniform(z_min,z_max,n))
-
-        kdt = KDTree4(centers)
-
-
-        none_centers =[]
-        for ind in range(n):
-            center = np.asarray([x_pos[ind],y_pos[ind],z_pos[ind]])
-            if len(kdt.in_range(center,self.dist_thr)) == 0:
-                none_centers.append(center)
-        return none_centers
 
     def box_from_box_center(self,x,y,z):
 
@@ -444,9 +430,92 @@ class DBcreator(object):
 
         pred_boxes,_= get_boxes(data_mtrx,box_centers_ijk,C,Mean0Sig1Normalization)
 
+        runCommand('close all')
+        for at_name in VX_FILE_SUFF.keys():
+
+        ##copy structure
+        runCommand('combine #{} name  {}_atoms modelId {}'.\
+                   format(pdb_id, at_name,Id_for_copy))
+        ## delete atoms
+        runCommand('delete #{}:@/element!={}'.format(Id_for_copy,at_name))
+        ## run molmap
+        no_atoms = get_object_by_id(Id_for_copy)==-1
+
+
+        if no_atoms:
+            runCommand('vop new zero_map origin {},{},{} modelId {}'.\
+                       format(np.mean(grid3D[0]),np.mean(grid3D[1]),np.mean(grid3D[1]),Id_for_molmap))
+        else:
+            runCommand('molmap #{} {}  modelId {}'.\
+                   format(Id_for_copy,res,Id_for_molmap))
+
+        #extract matrix (copy?)
+        vx_map[at_name]=map_to_matrix(Id_for_molmap,grid3D)
+
+        # delete copied structure
+        runCommand('close #{}'.format(Id_for_copy))
+        # delete mol map
+        runCommand('close #{}'.format(Id_for_molmap))
+            #create new ma
+            sample box
+
+
         dbloader.save_label_data_to_csv(pred_boxes,labels_corners , file_name_pref)
 
         return
+
+
+    def create_class_db_corners(self,mrc_file,pdb_file,file_name = [],file_name_suffix = '',limits_pdb=([-10.0**6,10.0**6],[-10.0**6,10.0**6],[-10.0**6,10.0**6]) ):
+
+        pdb_file_full_name = self.input_pdb_folder+pdb_file
+        mrc_file_full_name = self.mrc_maps_folder+mrc_file
+
+        if file_name==[]:
+            file_name = self.file_name_prefix + mrc_file[:-4]+file_name_suffix
+        file_name_pref = self.target_folder+file_name
+
+        #calc all boxes centers
+        centers_pdb,labels_pdb= self.calc_box_centers_and_labels_from_pdb(pdb_file,check_list = self.use_list,limits_pdb = limits_pdb)
+        if len(labels_pdb)==0:
+            print("DEBUG NO RES' in the BOX",mrc_file,limits_pdb )
+            return
+
+
+        centers_corners,labels_corners = self.centers_to_corners(centers_pdb,labels_pdb)
+
+        limits_xyz = self.calc_limits_xyz(centers_corners)
+
+        #clear chimera
+        runCommand('close all')
+        #load map
+        init_map = open_volume_file(mrc_file_full_name,model_id=17)[0]
+        resampled_map = self.resample_map_with_chimera(init_map,limits_in = limits_xyz,limits_out = limits_pdb)
+        # calc positions and labels
+        data_mtrx = resampled_map.full_matrix()
+        #calc transformation
+        C = EMmaps.get_transformation_ijk_to_xyz(resampled_map)
+        #calc filter matrix
+        filter_matrix = np.ones(data_mtrx.shape)
+        #swap data
+        mtrx_not_swapped = data_mtrx
+        filter_matrix_not_swapped = filter_matrix
+        data_mtrx = np.swapaxes(mtrx_not_swapped,0,2)
+        filter_matrix = np.swapaxes(filter_matrix_not_swapped,0,2)
+
+        box_centers_ijk = global_xyz_to_ijk(np.asarray(centers_corners),C)
+
+        pred_boxes,_= get_boxes(data_mtrx,box_centers_ijk,C,Mean0Sig1Normalization)
+
+    ##loop on atoms
+
+
+
+
+
+        dbloader.save_label_data_to_csv(pred_boxes, vx_boxes, labels_corners , file_name_pref)
+
+        return
+
 
 
     def resample_map_with_chimera(self, initial_map,limits_in=([10.0**6,-10.0**6],[10.0**6,-10.0**6],[10.0**6,-10.0**6]),limits_out=([-10.0**6,10.0**6],[-10.0**6,+10.0**6],[-10.0**6,+10.0**6])):
