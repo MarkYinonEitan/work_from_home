@@ -1,0 +1,80 @@
+
+import os
+import time
+import network3
+import numpy
+from network3 import Network 
+from network3 import ConvPoolLayer3D
+import matplotlib.pyplot as plt
+
+if '__file__' in locals():
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+else:
+    dir_path = os.getcwd()
+
+temp_folder = dir_path +'/../data/temp/'
+ 
+
+class NetworkAnalyser:
+    def __init__(self, net, results_folder=temp_folder):
+    
+        self.net = net
+        self.res_folder = results_folder
+        return
+    
+    def plot_time_vs_mini_batch_size(self, batch_span = range(1,100,10), N_train=1000,
+    save_or_show= 'save'):
+        file_name = 'run_time_minibatch.png'
+        #create train , test, valid set
+        time_span = []
+        N_epochs = 10
+        N_norm = 1000000
+	batch_span_for_plot = []
+        for mini_batch_size in  batch_span:
+	    new_layers = []
+	    for old_layer in self.net.layers:
+	        if type(old_layer) == ConvPoolLayer3D:
+                    #create new network layer
+	            new_image_shape = (mini_batch_size, old_layer.image_shape[1], old_layer.image_shape[2],old_layer.image_shape,[3],old_input_layer.image_shape[4]) 
+            new_layer = ConvPoolLayer3D(image_shape=new_image_shape,                   filter_shape=old_layer.filter_shape, poolsize=old_layer.poolsize,                    activation_fn=old_layer.activation_fn)
+                    new_layers.append(new_layer)
+                else:
+		    new_layers.append(old_layer)
+
+            #create new network
+            new_layers = [new_input_layer]+ self.net.layers[1:]
+            net_new = Network(new_layers, mini_batch_size)
+
+            #create database            
+            n_in = numpy.prod(new_image_shape[2:])
+            n_out = net_new.layers[-1].n_out
+            train_x = numpy.random.random([N_train,n_in])
+            train_y = numpy.random.choice(range(n_out),N_train)
+            train_data = network3.shared((train_x,train_y))
+            n_max = batch_span[-1]
+            test_x = numpy.random.random([n_max,n_in])
+            test_y = numpy.random.choice(range(n_out),n_max)
+            test_data = network3.shared((test_x,test_y))
+            valid_x = numpy.random.random([n_max,n_in])
+            valid_y = numpy.random.choice(range(n_out),n_max)
+            valid_data = network3.shared((valid_x,valid_y))
+            #train
+            start_time = time.time()
+            net_new.SGD(train_data,N_epochs,mini_batch_size,0.0, valid_data,test_data,lmbda=0.0001)
+            end_time = time.time()
+
+            #calc_time
+            run_time = end_time-start_time #seconds
+            time_span.append(run_time/N_train/N_epochs*N_norm)
+            batch_span_for_plot.append(mini_batch_size)
+	    #plot or show
+            plt.close()
+            plt.plot(batch_span_for_plot,time_span)
+            plt.xlabel('mini batch size')
+            plt.ylabel('time for 10^6 samples [sec] ')
+            plt.title('Train Time vs mini batch size')
+            if save_or_show == 'save':
+                plt.savefig(self.res_folder+file_name)
+            else:
+                plt.show()
+
