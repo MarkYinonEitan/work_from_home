@@ -58,7 +58,7 @@ limit_boxes      = dbcreator.get_regions(data_folder+input_pdb_file,N_divide)[0]
 dbc.create_class_db_corners(input_mrc_file, input_pdb_file, limits_pdb = limit_boxes ,file_name_suffix = '_0')
 
 f_csv = "/Users/markroza/Documents/work_from_home/data/AAnchor2/first_impl/DB_from_1yti_0"
-
+f_csv = "/Users/markroza/Documents/work_from_home/data/AAnchor2/first_impl/DB_from_emd-7526_rot9_384"
 data_dict = {}
 dbloader.load_train_data_to_dict([f_csv],data_dict)
 
@@ -70,4 +70,4 @@ for x in dd_test_corners:
 	print(x['box_center_x'],x['box_center_y'],x['box_center_z'])
 	print(x["phi"],x["psi"],x['chi1'],x['chi2'],x['chi3'],x['chi4'])
 
-visualization_utils.visual_box_test(f_csv, data_folder+input_pdb_file,)
+visualization_utils.visual_box_test(f_csv, data_folder+'6cmx_rot9.pdb',)
