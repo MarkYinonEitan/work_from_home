@@ -16,19 +16,18 @@ import MarkChimeraUtils
 reload(MarkChimeraUtils)
 
 
-cur_pass = os.path.realpath(__file__)
+cur_pass = os.path.dirname(os.path.realpath(__file__))
 
 python_path = cur_pass + '/../python/'
 sys.path.append(python_path)
 
-import datasets_loader
-from datasets_loader import VX_BOX_SIZE, MAP_BOX_SIZE, RESOLUTION, VOX_SIZE
 from kdtree import KDTree4
 from process_rotamers_data import read_rotamers_data_text_file
 from process_rotamers_data import get_pdb_id
 import dbloader
 from dbloader import LabelbyAAType
-from dbloader import Mean0Sig1Normalization, NoNormalization, get_boxes
+from dbloader import Mean0Sig1Normalization, NoNormalization
+from dbloader import VX_BOX_SIZE, MAP_BOX_SIZE, RESOLUTION, VOX_SIZE, ATOM_NAMES
 
 data_folder  = '/specific/netapp5_2/iscb/wolfson/Mark/data/AAnchor/'
 defoult_rotamers_file_name = data_folder  + '/rotamersdata/DatasetForBBDepRL2010.txt'
@@ -39,17 +38,17 @@ DEBUG_FILE = 'debug.txt'
 
 def calc_all_matrices(pdb_file, map_file,vx_size = VOX_SIZE, res = RESOLUTION):
     prot1 = chimera.openModels.open(pdb_file)[0]
-    map_obj = VolumeViewer.volume.open_volume_file(map_file)[0]
+    map_obj = open_volume_file(map_file)[0]
     pdb_id = prot1.id
     map_id = map_obj.id
 
     #add hydrogens
     runCommand('addh spec #{}'.format(pdb_id))
-
-    Xs,Ys,Zs = MarkChimeraUtils.calc_3D_grid(pdb_id,vx_size,res)
+    margin = VX_BOX_SIZE*VOX_SIZE
+    Xs,Ys,Zs = MarkChimeraUtils.calc_3D_grid(pdb_id,vx_size,margin)
     grid3D = (Xs,Ys,Zs)
     em_mtrx = MarkChimeraUtils.map_to_matrix(map_id,grid3D)
-    vx_mtrc = MarkChimeraUtils.calc_voxalization_by_atom_type(pdb_id,grid3D,res=res)
+    vx_mtrc = MarkChimeraUtils.calc_voxalization_by_atom_type(pdb_id,grid3D,res=res, atomTypes = ATOM_NAMES)
 
     return em_mtrx, vx_mtrc, grid3D
 
@@ -130,7 +129,7 @@ class EMmaps(object):
 
 
 class DBcreator(object):
-    def __init__(self, input_pdb_folder = TEMP_FOLDER, mrc_maps_folder = TEMP_FOLDER,target_folder = TEMP_FOLDER, file_name_prefix = 'DBfrom_', list_file_name=defoult_rotamers_file_name,  label = LabelbyAAType, box_center = BoxCenterAtCG, resolution = 3.0,    normalization = NoNormalization, dist_thr = DEFAULT_DIST_THRESHOLD, nones_ratio = DEFAULT_NONES_RATIO,step_for_detection = DEFAULT_STEP_FOR_DETECTION,debug_file=DEBUG_FILE,is_corners = False,        use_list = False ):
+    def __init__(self, input_pdb_folder = TEMP_FOLDER, mrc_maps_folder = TEMP_FOLDER,target_folder = TEMP_FOLDER, file_name_prefix = 'DBfrom_', list_file_name=defoult_rotamers_file_name,  label = LabelbyAAType, box_center = BoxCenterAtCG, resolution = 3.0,    normalization = NoNormalization, dist_thr = DEFAULT_DIST_THRESHOLD, step_for_detection = DEFAULT_STEP_FOR_DETECTION,debug_file=DEBUG_FILE,is_corners = False,        use_list = False ):
         """         """
         self.input_pdb_folder = input_pdb_folder+'/'
         self.mrc_maps_folder = mrc_maps_folder+'/'
@@ -143,7 +142,6 @@ class DBcreator(object):
         self.box_center = box_center
         self.normalization = normalization
         self.dist_thr = dist_thr
-        self.nones_ratio = nones_ratio
         self.step = step_for_detection
         self.debug_file = debug_file
         self.is_corners = is_corners
@@ -156,12 +154,7 @@ class DBcreator(object):
         f.write(line_to_write+'\n')
         f.close()
 
-    def get_residues_from_all_models(self,pdb_file):
-        all_mdls = chimera.openModels.open(self.input_pdb_folder+pdb_file,'PDB')
-        res_list = []
-        for mdl in all_mdls:
-            res_list = res_list + mdl.residues
-        return res_list
+
 
     def is_in_list(self, res_struct,pdb_id):
         if not (pdb_id in self.rotamers_by_pdb_dict.keys()):
@@ -190,7 +183,7 @@ class DBcreator(object):
 
         box_centers =[]
         labels = []
-        all_res_list = self.get_residues_from_all_models(pdb_file_name)
+        all_res_list = MarkChimeraUtils.get_residues_from_all_models(pdb_file_name)
         if check_list:
             all_res_list = list(filter(lambda x: self.is_in_list(x,pdb_id), all_res_list))
 
@@ -225,9 +218,6 @@ class DBcreator(object):
                     lb_row[ky] = rotamers_data[ky]
 
                 labels.append(lb_row)
-
-        print "DEBUG FILTER BOX 0 ", limits_pdb
-        print "DEBUG FILTER BOX", len(all_res_list),len(centers),len(labels)
         return centers, labels
 
 
@@ -235,7 +225,7 @@ class DBcreator(object):
     def calc_labels_kdtree(self,pdb_file):
         #extract aa and centers
         ## loop on all residues in this pdb
-        all_res_list = self.get_residues_from_all_models(pdb_file)
+        all_res_list = MarkChimeraUtils.get_residues_from_all_models(pdb_file)
         centers = []
         labels = []
         for res_strct in all_res_list:
@@ -249,26 +239,29 @@ class DBcreator(object):
 
 
     def centers_to_corners(self,centers,labels, grid3D):
-        is_sorted = lambda a: np.all(a[:-1] <= a[1:]
+        is_sorted = lambda a: np.all(a[:-1] <= a[1:])
 
-        Xs,Ys, Zs = grid3D
+        Xs,Ys,Zs = grid3D
 
-        assert is_sorted(Xs) and is_sorted(Ys) and is_sorted(Zs)
+        X_ax = Xs[:,0,0]
+        Y_ax = Ys[0,:,0]
+        Z_ax = Zs[0,0,:]
+        assert is_sorted(X_ax) and is_sorted(Y_ax) and is_sorted(Z_ax)
 
         c0 = np.asarray(centers)
 
-        in_x_max = np.searchsorted(Xs,c0[:,0],'left')
+        in_x_max = np.searchsorted(X_ax,c0[:,0],'left')
         in_x_min = in_x_max-1
-        xmax = Xs[in_x_max]
-        xmin = Xs[in_x_min]
-        in_y_max = np.searchsorted(Ys,c0[:,1],'left')
+        xmax = X_ax[in_x_max]
+        xmin = X_ax[in_x_min]
+        in_y_max = np.searchsorted(Y_ax,c0[:,1],'left')
         in_y_min = in_y_max-1
-        ymax = Ys[in_y_max]
-        ymin = Ys[in_y_min]
-        in_z_max = np.searchsorted(Zs,c0[:,2],'left')
+        ymax = Y_ax[in_y_max]
+        ymin = Y_ax[in_y_min]
+        in_z_max = np.searchsorted(Z_ax,c0[:,2],'left')
         in_z_min = in_z_max-1
-        zmax = Zs[in_z_max]
-        zmin = Zs[in_z_min]
+        zmax = Z_ax[in_z_max]
+        zmin = Z_ax[in_z_min]
 
         c_ddd = np.vstack((xmin,ymin,zmin)).T
         c_ddu = np.vstack((xmin,ymin,zmax)).T
@@ -288,7 +281,7 @@ class DBcreator(object):
         ind_udu = np.vstack((in_x_max,in_y_min,in_z_max)).T
         ind_uud = np.vstack((in_x_max,in_y_max,in_z_min)).T
         ind_uuu = np.vstack((in_x_max,in_y_max,in_z_max)).T
-        ind_corners = np.concatenate((c_ddd,c_ddu,c_dud,c_duu,c_udd,c_udu,c_uud,c_uuu))
+        ind_corners = np.concatenate((ind_ddd,ind_ddu,ind_dud,ind_duu,ind_udd,ind_udu,ind_uud,ind_uuu))
 
         labels_corners = []
 
@@ -297,6 +290,7 @@ class DBcreator(object):
                 labels_corners.append(copy.deepcopy(labels[in_data]))
 
         c_corners_list = [c_corners[k,:] for k in range(c_corners.shape[0])]
+        ind_corners_list = [ind_corners[k,:] for k in range(ind_corners.shape[0])]
         #correct positions
 
         for k in range(len(c_corners_list)):
@@ -304,7 +298,7 @@ class DBcreator(object):
             labels_corners[k]["box_center_y"] = c_corners_list[k][1]
             labels_corners[k]["box_center_z"] = c_corners_list[k][2]
 
-        return ind_corners,c_corners_list,labels_corners
+        return ind_corners_list,c_corners_list,labels_corners
 
     def calc_limits_xyz(self, centers_list):
         cent_arr = np.asarray(centers_list)
@@ -321,15 +315,11 @@ class DBcreator(object):
 
         return ([x_min,x_max],[y_min,y_max],[z_min,z_max])
 
-    def create_class_db_corners(self,mrc_file,pdb_file,file_name = [],file_name_suffix = '', , map_source = 'UNKNOWN', limits_pdb=([-10.0**6,10.0**6],[-10.0**6,10.0**6],[-10.0**6,10.0**6]) ):
+    def create_class_db_corners(self,mrc_file,pdb_file,file_name = [],file_name_suffix = '', map_source = 'UNKNOWN', limits_pdb=([-10.0**6,10.0**6],[-10.0**6,10.0**6],[-10.0**6,10.0**6]) ):
 
-        print("DEBUG 3435",mrc_file,limits_pdb )
         pdb_file_full_name = self.input_pdb_folder+pdb_file
         mrc_file_full_name = self.mrc_maps_folder+mrc_file
 
-
-
-        print ("DEBUG 8832", file_name==[])
         if file_name==[]:
             file_name = self.file_name_prefix + mrc_file[:-4]+file_name_suffix
         file_name_pref = self.target_folder+file_name
@@ -338,7 +328,7 @@ class DBcreator(object):
         #class calc 3D grid
         runCommand('close all')
         #calc all boxes centers
-        centers_pdb,labels_pdb= self.calc_box_centers_and_labels_from_pdb(pdb_file,check_list = self.use_list,limits_pdb = limits_pdb)
+        centers_pdb,labels_pdb= self.calc_box_centers_and_labels_from_pdb(pdb_file_full_name,check_list = self.use_list,limits_pdb = limits_pdb)
         if len(labels_pdb)==0:
             print("DEBUG NO RES' in the BOX",mrc_file,limits_pdb )
             return
@@ -347,17 +337,18 @@ class DBcreator(object):
         for l_data in labels_pdb:
             l_data["MAP_SOURCE"] = map_source
 
-        em_mtrx, vx_mtrc, grid3D = calc_all_matrices(pdb_file, map_file,vx_size = VOX_SIZE, res = RESOLUTION)
+        em_mtrx, vx_mtrc, grid3D = calc_all_matrices(pdb_file_full_name, mrc_file_full_name,vx_size = VOX_SIZE, res = RESOLUTION)
         centers_indexes, centers_corners,labels_corners =   self.centers_to_corners(centers_pdb,labels_pdb,grid3D)
 
         vx_boxes = []
         pred_boxes = []
-        for for ind_cent in centers_indexes:
-            box4d = dataset_loader.getbox(em_mtrx, ind_cent[0], ind_cent[1], ind_cent[2], MAP_BOX_SIZE, normalization = self.normalization)
+        for  ind_cent in centers_indexes:
+            box4d = dbloader.getbox(em_mtrx, ind_cent[0], ind_cent[1], ind_cent[2], MAP_BOX_SIZE, normalization = self.normalization)
+
             pred_boxes.append(np.squeeze(box4d))
             voxaliztion_box={}
             for at_name in vx_mtrc.keys():
-                voxaliztion_box[at_name] =  dataset_loader.getbox(vx_mtrc[at_name], ind_cent[0], ind_cent[1], ind_cent[2], VX_BOX_SIZE, normalization = dbloader.NoNormalization)
+                voxaliztion_box[at_name] =  dbloader.getbox(vx_mtrc[at_name], ind_cent[0], ind_cent[1], ind_cent[2], VX_BOX_SIZE, normalization = dbloader.NoNormalization)
             vx_boxes.append(voxaliztion_box)
 
 

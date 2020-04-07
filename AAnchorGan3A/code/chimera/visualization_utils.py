@@ -11,7 +11,7 @@ import os, sys
 import MarkChimeraUtils
 from chimera import runCommand
 
-cur_pass = os.path.realpath(__file__)
+cur_pass = os.path.dirname(os.path.realpath(__file__))
 
 utils_path = cur_pass + '/../pythoncode/utils/'
 chimera_path = cur_pass + '/../chimeracode/'
@@ -25,7 +25,7 @@ def create_map_from_box(box, box_center=(0,0,0), apix = 1):
     vmap = VolumeViewer.Volume(data)
     vmap.show()
 
-def visual_box_test(file_name, pdb_file, N = 5, half_bx_size=5):
+def visual_box_test(file_name, pdb_file, N = 5, half_bx_size=5 , atomName = ''):
 
     runCommand('close all')
 
@@ -35,12 +35,19 @@ def visual_box_test(file_name, pdb_file, N = 5, half_bx_size=5):
     CA_list=[]
     prot = chimera.openModels.open(pdb_file,'PDB')[0]
 
+
     in_show = set([np.random.choice(range(len(data_dict["boxes"]))) for x in range(N)])
 
     #load pdb file
     for it in in_show:
         ref_data = data_dict["data"][it]
-        bx_not_sw = data_dict["boxes"][it]
+        if atomName != '':
+            ind_atom = dbloader.ATOM_NAMES.index(atomName)
+            vx_all = data_dict["vx"][it]
+            print("DEBUG 345", vx_all.shape)
+            bx_not_sw = np.squeeze(vx_all[:,:,:,ind_atom])
+        else:
+            bx_not_sw = data_dict["boxes"][it]
         center = (ref_data['box_center_x'], ref_data['box_center_y'],ref_data['box_center_z'])
         bx  = np.swapaxes(bx_not_sw,0,2)
         center_corrected = (center[0]-half_bx_size, center[1]-half_bx_size, center[2]-half_bx_size)
@@ -50,4 +57,6 @@ def visual_box_test(file_name, pdb_file, N = 5, half_bx_size=5):
 
     atoms_spec = MarkChimeraUtils.atomsList2spec(CA_list)
 
-    runCommand("delete {} za>8".format(atoms_spec))
+    runCommand("delete {} za>{}".format(atoms_spec,half_bx_size*1.5))
+    if atomName != '':
+        runCommand('delete #{}:@/element!={}'.format(prot.id,atomName))

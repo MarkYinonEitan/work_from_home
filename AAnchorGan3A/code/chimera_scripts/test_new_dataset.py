@@ -10,7 +10,7 @@ from VolumeViewer import volume_from_grid_data
 from VolumeViewer import open_volume_file
 
 import os
-cur_pass = os.path.realpath(__file__)
+cur_pass = os.path.dirname(os.path.realpath(__file__))
 
 utils_path = cur_pass + '/../python/'
 chimera_path = cur_pass + '/../chimera/'
@@ -22,6 +22,7 @@ import dbcreator
 reload(dbcreator)
 import dbloader
 reload (dbloader)
+
 from dbcreator import Mean0Sig1Normalization, DBcreator,BoxCenterAtCG
 from dbloader import LabelbyAAType,Mean0Sig1Normalization, NoNormalization
 import utils_project
@@ -40,12 +41,10 @@ dbc = DBcreator( input_pdb_folder = input_pdb_folder,
                         mrc_maps_folder = mrc_maps_folder,
                         target_folder = target_folder,
                         file_name_prefix = 'DB_from_',
-                        apix = 1.0,
                         label=LabelbyAAType,
                         box_center=BoxCenterAtCG,
                         normalization =Mean0Sig1Normalization,
                         list_file_name = None,
-                        cubic_box_size = 11,
                         is_corners = True,
                         use_list = False)
 
@@ -58,8 +57,7 @@ limit_boxes      = dbcreator.get_regions(data_folder+input_pdb_file,N_divide)[0]
 
 dbc.create_class_db_corners(input_mrc_file, input_pdb_file, limits_pdb = limit_boxes ,file_name_suffix = '_0')
 
-f_csv = "/Users/markroza/Documents/work_from_home/data/AAnchorGan3A/DB_from_1yti_0"
-f_csv = "/Users/markroza/Documents/work_from_home/data/AAnchorGan3A/DB_from_emd-7526_rot9_384"
+f_csv = data_folder + "DB_from_1yti_0"
 data_dict = {}
 dbloader.load_train_data_to_dict([f_csv],data_dict)
 
@@ -71,4 +69,5 @@ for x in dd_test_corners:
 	print(x['box_center_x'],x['box_center_y'],x['box_center_z'])
 	print(x["phi"],x["psi"],x['chi1'],x['chi2'],x['chi3'],x['chi4'])
 
-visualization_utils.visual_box_test(f_csv, data_folder+'6cmx_rot9.pdb',)
+visualization_utils.visual_box_test(f_csv, data_folder+'1yti.pdb')
+visualization_utils.visual_box_test(f_csv, data_folder+'1yti.pdb', N = 5, half_bx_size=7.5 , atomName = 'O')
