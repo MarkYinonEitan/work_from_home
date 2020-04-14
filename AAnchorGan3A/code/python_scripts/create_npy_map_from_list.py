@@ -88,13 +88,10 @@ def disc_test_points(test_points, disc_net_file):
     return
 
 
-def create_one_map(pdb_file, inp_data_fld,net_string, vae_gan_file,out_file_name):
+def create_one_map(file_name_pref, inp_data_fld,net_string, vae_gan_file,out_file_name):
 
     em_data = EM_DATA(inp_data_fld,train_pdbs=[pdb_file], is_random = False)
-    test_points = getTestPoints(em_data)
 
-    print("DEBUG 3238204", pdb_file)
-    print(len(test_points))
 
     vae_gan = utils_project.get_net_by_string(net_string)
 
@@ -137,17 +134,15 @@ def create_one_map(pdb_file, inp_data_fld,net_string, vae_gan_file,out_file_name
     np.save(out_file_name,out_matrx)
 
 if __name__ == "__main__":
-    list_file   = sys.argv[1]
-    vx_folder   = sys.argv[2]
-    out_folder  = sys.argv[3]
-    net_str     = sys.argv[4]
-    vae_gan_file = sys.argv[5]
-    resolution  = np.float(sys.argv[6])
-    vx_size     = np.float(sys.argv[7])
+    list_file    = sys.argv[1]
+    data_folder  = sys.argv[2]
+    net_str      = sys.argv[3]
+    vae_gan_file = sys.argv[4]
+    resolution   = np.float(sys.argv[5])
+    vx_size      = np.float(sys.argv[6])
 
     print("list_file:",list_file)
-    print("vx_folder:",vx_folder)
-    print("out_folder:",out_folder)
+    print("data_folder:",data_folder)
     print("vae_gan_file:",vae_gan_file)
     print("net_str:",net_str)
     print("resolution:",resolution)
@@ -161,4 +156,4 @@ if __name__ == "__main__":
         f_out = dataset_loader.get_file_names(pdb_file,out_folder)
         out_file_name = f_out["GAN_NPY"]
         tf.keras.backend.clear_session()
-        create_one_map(pdb_file, vx_folder,net_str, vae_gan_file,out_file_name)
+        create_gan_boxe(pdb_file, vx_folder,net_str, vae_gan_file,out_file_name)

@@ -1,8 +1,8 @@
 try:
-  import all_nets
+  import aanchor_all_nets
   import tensorflow as tf
-  import net_3d_5
-  import net_3d_mean_sigma
+  import gan_net_3d_5
+  import gan_net_3d_mean_sigma
 except ImportError:
   print("run without TENSORFLOW")
 
@@ -29,9 +29,11 @@ def read_list_file(list_file):
             res = float(wrds[2])
             train_test = wrds[3]
             is_virus = wrds[4]
+            map_source = wrds[5]
 
             line = fp.readline()
-            pairs.append({"pdb_file":pdb_id,"emd_file":emd_id,"res":res,"train_test":train_test, "is_virus":is_virus})
+            pairs.append({"pdb_file":pdb_id,"emd_file":emd_id,"res":res,"train_test":train_test, "is_virus":is_virus, \
+            "map_source":map_source})
     return pairs
 
 def read_thr_file(thr_file):
@@ -51,19 +53,19 @@ def read_thr_file(thr_file):
 
 def get_net_by_string(net_string):
     if net_string == 'V5_no_reg':
-        return all_nets.V5_no_reg()
+        return aanchor_all_nets.V5_no_reg()
     if net_string == 'V5_DROP_REG':
-        return all_nets.V5_Drop_Reg()
+        return aanchor_all_nets.V5_Drop_Reg()
     if net_string == 'V5_DROP_REG_2':
-        return all_nets.V5_Drop_Reg_2()
+        return aanchor_all_nets.V5_Drop_Reg_2()
     if net_string == 'V5_REG_3':
-        return all_nets.V5_Reg_3()
+        return aanchor_all_nets.V5_Reg_3()
     if net_string == 'disc_v1':
-        return net_3d_5.DISC_V1()
+        return gan_net_3d_5.DISC_V1()
     if net_string == 'gan_v1':
-        return net_3d_5.VAE_GAN1()
+        return gan_net_3d_5.VAE_GAN1()
     if net_string == 'gan_mean_sigma':
-        return net_3d_mean_sigma.VAE_GAN1()
+        return gan_net_3d_mean_sigma.VAE_GAN1()
 
 
     raise Exception('No Net Found')

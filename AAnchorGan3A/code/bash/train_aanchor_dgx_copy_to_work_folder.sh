@@ -1,14 +1,16 @@
 
-LIST_FILE="//specific/netapp5_2/iscb/wolfson/Mark/data/AAnchor/list_3A_after_rotation.txt"
-DB_FOLDER="//specific/netapp5_2/iscb/wolfson/Mark/data/AAnchor/cryoEM/DB2931class_rot10/"
+SOURCE_FOLDER="$(pwd)/"
+
+LIST_FILE="$SOURCE_FOLDER/list_3A_after_rotation.txt"
+DB_FOLDER="$SOURCE_FOLDER/DB2931class_rot10/"
 D=$(date "+DATE_%m_%d_%y_TIME_%H_%M_%S")
-WORK_FOLDER="//specific/netapp5_2/iscb/wolfson/Mark/data/AAnchor/AAnchor_train_resuts/"
-NET_STRING="V5_DROP_REG"
+WORK_FOLDER="$SOURCE_FOLDER/train_res/"
+NET_STRING="V5_DROP_REG_2"
 WEIGHTS_FILE="NOTHING"
 NUM_EPOCHS="300"
 
-OUT_FOLDER="$WORK_FOLDER//$NET_STRING_$D//"
-PYTHON_SCRIPT_TEMP="//specific/netapp5_2/iscb/wolfson/Mark/git/work_from_home/AAnchor_dgx/pythonscripts/run_train_on_dgx_template.py"
+OUT_FOLDER="$WORK_FOLDER//AANCHOR_$D_$NET_STRING//"
+PYTHON_SCRIPT_TEMP="//specific/netapp5_2/iscb/wolfson/Mark/git/work_from_home/AAnchorGan3A/code/python_scripts/run_train_on_dgx_template.py"
 
 PYTHON_SCRIPT="$OUT_FOLDER//run_train_on_dgx.py"
 #

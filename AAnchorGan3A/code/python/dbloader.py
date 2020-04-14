@@ -76,10 +76,13 @@ def get_all_pdbs(data_folder):
     all_pdbs =[get_pdb_id(x)  for x in glob.glob1(data_folder,'*.csv')]
     return all_pdbs
 
+def search_for_database_files(folder, patt):
+    f_names = [x.replace("DB_from_","").replace(".csv","")  for x in glob.glob1(folder,'*{}*.csv'.format(patt))]
+    return f_names
 
-def save_label_data_to_csv(em_boxes, vx_boxes, labels_dict, file_name_pref):
+def save_label_data_to_csv(em_boxes, vx_boxes, labels_dict, file_name_pref, folder_name):
 
-    file_name_csv, file_name_map, file_name_vox = data_file_name(file_name_pref)
+    file_name_csv, file_name_map, file_name_vox = data_file_name(file_name_pref,folder_name)
 
     #save map boxes
     box_shape = em_boxes[0].shape
@@ -104,8 +107,33 @@ def save_label_data_to_csv(em_boxes, vx_boxes, labels_dict, file_name_pref):
             writer.writerow(data)
     return
 
+def save_data_dictionary(data_dict, file_name_pref, folder_name):
 
-def load_train_data_to_dict(file_name_s, empty_dict):
+    file_name_csv, file_name_map, file_name_vox = data_file_name(file_name_pref,folder_name)
+
+    #save map boxes
+    box_shape = data_dict["boxes"][0].shape
+    all_boxes = [np.reshape(x,( box_shape[0]*box_shape[1]*box_shape[2])) for x in data_dict["boxes"]]
+    all_boxes_array = np.array(all_boxes)
+    np.save(file_name_map,all_boxes_array)
+
+    #save vox boxes
+    all_vxs=[x for x in data_dict["vx"]]
+    all_vxs_array = np.array(all_vxs)
+    np.save(file_name_vox,all_vxs_array)
+
+    #save labels to csv
+    labels_dict = data_dict["data"]
+    csv_columns = list(labels_dict[0].keys())
+    with open(file_name_csv, 'w') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
+        writer.writeheader()
+        for data in labels_dict:
+            writer.writerow(data)
+    return
+
+
+def load_train_data_to_dict(file_name_s, folder_name, empty_dict):
 
     number_fields = ["phi","box_center_y","chi2","chi3","chi1",\
     "box_center_x","pos","chi4","label","CG_pos_X","CG_pos_Y",\
@@ -121,7 +149,7 @@ def load_train_data_to_dict(file_name_s, empty_dict):
 
     for file_name_pref in file_name_s:
 
-        file_name_csv, file_name_map, file_name_vox = data_file_name(file_name_pref)
+        file_name_csv, file_name_map, file_name_vox = data_file_name(file_name_pref, folder_name)
 
         single_box_data = np.load(file_name_map)
         box_size = np.int(np.round(single_box_data.shape[1]**(1./3)))
@@ -143,13 +171,13 @@ def load_train_data_to_dict(file_name_s, empty_dict):
             for row in empty_dict["data"]:
                 row[ky] = np.float(row[ky])
 
-    empty_dict["labels"] = [x["label"] for k in empty_dict["data"]]
-
+    empty_dict["labels"] = np.array([x["label"] for x in empty_dict["data"]]).astype('int').tolist()
 
     #add None Label
-    empty_dict["boxes"].append(np.zeros(empty_dict["boxes"][-1].shape))
+    empty_dict["boxes"].append(np.ones(empty_dict["boxes"][-1].shape))
     empty_dict["labels"].append(0)
-
+    empty_dict["vx"].append(empty_dict["vx"][0])
+    empty_dict["data"].append(empty_dict["data"][0])
 
     stop = timeit.default_timer()
 
@@ -401,16 +429,13 @@ def generator_from_data_random(data_dict):
     return gen
 
 def permute_train_dict(train_data_dict):
-    self.N_train = len(self.train_data_dict["boxes"])
 
+    N_train = len(train_data_dict["boxes"])
     in_x = np.random.permutation(N_train)
     train_data_dict["boxes"] = [train_data_dict["boxes"][k] for k in in_x]
     train_data_dict["data"] = [train_data_dict["data"][k] for k in in_x]
     train_data_dict["vx"] = [train_data_dict["vx"][k] for k in in_x]
     return
-
-
-
 
 class EM_DATA_REAL_SYTH():
 
@@ -453,15 +478,14 @@ class EM_DATA():
 
     def __init__(self,folder_name, train_pdbs = [],is_random = True):
         #load data
-        self.full_file_names = [folder_name+'/'+x for x in train_pdbs]
         self.train_data_dict = {}
-        load_train_data_to_dict(self.full_file_names, self.train_data_dict)
+        load_train_data_to_dict(train_pdbs, folder_name, self.train_data_dict)
 
         self.N_train = len(self.train_data_dict["boxes"])
 
         #ranomize train points
         if is_random:
-            permute_train_dict(train_data_dict)
+            permute_train_dict(self.train_data_dict)
 
         self.N_batches = self.N_train // BATCH_SIZE
 
@@ -477,21 +501,25 @@ class EM_DATA():
 
         return
 
-def data_file_name( file_pref, folder_name=""):
-            # load data - valid
-    file_name_csv = folder_name + file_pref + ".csv"
-    file_name_map = folder_name + file_pref + ".mp.npy"
-    file_name_vox = folder_name + file_pref + ".vx.npy"
+def data_file_name( file_pref, folder_name):
+    pref = "DB_from_"
+    file_name_csv = folder_name + pref+file_pref + ".csv"
+    file_name_map = folder_name + pref+file_pref + ".mp.npy"
+    file_name_vox = folder_name + pref+file_pref + ".vx.npy"
 
     return file_name_csv, file_name_map, file_name_vox
+
+
+def get_data_point(data_dict,k):
+    feature = data_dict["vx"][k]
+    label = np.expand_dims(data_dict["boxes"][k],3)
+
+    return (feature, label)
 
 def generator_from_data(data_dict):
     def gen():
         for in_box in range(len(data_dict["boxes"])):
-            feature = data_dict["vx"][in_box]
-            label = data_dict["boxes"][in_box]
-
-            yield (feature,label)
+            yield get_data_point(data_dict,in_box)
     return gen
 
 def generator_from_data_real_synth(dict_data):

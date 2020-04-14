@@ -3,19 +3,13 @@ import numpy as np
 import matplotlib
 import tensorflow as tf
 
-from ops import batch_normal, de_conv3, conv3d, fully_connect
+from gan_ops import batch_normal, de_conv3, conv3d, fully_connect
 
 
-#get current directory
-if '__file__' in locals():
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-else:
-    dir_path = os.getcwd()
-python_path = dir_path
-sys.path.append(python_path)
-import dataset_loader
-from dataset_loader import VOX_SIZE, RESOLUTION, N_SAMPLS_FOR_1V3
-from dataset_loader import N_CHANNELS, BATCH_SIZE,NBOX_OUT, NBOX_IN
+
+import dbloader
+from dbloader import VOX_SIZE, RESOLUTION, N_SAMPLS_FOR_1V3
+from dbloader import N_CHANNELS, BATCH_SIZE, MAP_BOX_SIZE, VX_BOX_SIZE
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -24,9 +18,6 @@ D_lr = 5e-5
 G_lr = 1e-4
 alpha_1 = 50
 alpha_2 = 0.05
-alpha_mean  = 1
-alpha_sigma  = 1
-
 d_scale_factor=0.000000000025
 g_scale_factor=0.000000000075
 
@@ -44,11 +35,11 @@ class DISC_V1():
 
         self.log_vars = []
 
-        mp_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_OUT, NBOX_OUT, NBOX_OUT ,1])
-        mp_fake = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_OUT, NBOX_OUT, NBOX_OUT ,1])
+        mp_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, MAP_BOX_SIZE, MAP_BOX_SIZE, MAP_BOX_SIZE ,1])
+        mp_fake = tf.placeholder(tf.float32, shape=[BATCH_SIZE, MAP_BOX_SIZE, MAP_BOX_SIZE, MAP_BOX_SIZE ,1])
 
-        vx_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_IN, NBOX_IN, NBOX_IN ,N_CHANNELS])
-        vx_fake = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_IN, NBOX_IN, NBOX_IN , N_CHANNELS])
+        vx_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, VX_BOX_SIZE, VX_BOX_SIZE, VX_BOX_SIZE ,N_CHANNELS])
+        vx_fake = tf.placeholder(tf.float32, shape=[BATCH_SIZE, VX_BOX_SIZE, VX_BOX_SIZE, VX_BOX_SIZE , N_CHANNELS])
 
         # inputs
         self.mp_real = mp_real
@@ -57,7 +48,7 @@ class DISC_V1():
         self.vx_real = vx_real
         self.vx_fake = vx_fake
 
-        self.mp_rand = tf.random_normal(shape=self.mp_real.get_shape(),mean = dataset_loader.MEAN,stddev = dataset_loader.SIGMA)
+        self.mp_rand = tf.random_normal(shape=self.mp_real.get_shape(),mean = dbloader.MEAN,stddev = dbloader.SIGMA)
 
         self.D_real = discriminate(self.mp_real,self.vx_real, reuse=False)
         self.D_rand = discriminate(self.mp_rand, self.vx_real, reuse=True)
@@ -88,8 +79,8 @@ class DISC_V1():
 class VAE_GAN1():
     def __init__(self):
 
-        mp_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_OUT, NBOX_OUT, NBOX_OUT ,1])
-        vx_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, NBOX_IN, NBOX_IN, NBOX_IN ,N_CHANNELS])
+        mp_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, MAP_BOX_SIZE, MAP_BOX_SIZE, MAP_BOX_SIZE ,1])
+        vx_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, VX_BOX_SIZE, VX_BOX_SIZE, VX_BOX_SIZE ,N_CHANNELS])
 
         self.vx_real = vx_real
         self.mp_real = mp_real
@@ -120,16 +111,6 @@ class VAE_GAN1():
         self.mp_fake = Generate(self.z_x, reuse=False)
         self.mp_rand = Generate(self.zp, reuse=True)
         self.reconstr_loss = tf.losses.mean_squared_error(self.mp_real, self.mp_fake)
-        self.mp_fake_mean = tf.reduce_mean(tf.reduce_mean(self.mp_fake,[0,1,2]))
-        self.mp_fake_sigma = tf.reduce_mean(tf.math.reduce_std(self.mp_fake,[0,1,2]))
-
-        print("DEBUG 234 ", tf.shape(self.reconstr_loss))
-        print("DEBUG 235 ", tf.shape(self.mp_fake_mean))
-        print("DEBUG 235 ", tf.shape(self.mp_fake))
-
-
-
-        self.Loss_Mean_Sigma = alpha_mean*tf.losses.mean_squared_error(self.mp_fake_mean, dataset_loader.MEAN) + alpha_sigma*tf.losses.mean_squared_error(self.mp_fake_sigma, dataset_loader.SIGMA)
 
         'DISCRIMINATOR'
         self.D_real = discriminate(self.mp_real,self.vx_real, reuse=False)
@@ -151,7 +132,7 @@ class VAE_GAN1():
         self.Disc_Acc = (tf.math.reduce_sum(tf.math.sign(tf.math.sign(self.D_real-0.5) + 1) +tf.math.sign(tf.math.sign(0.5-self.D_fake)+1)))/2/BATCH_SIZE
 
         self.D_loss = self.L_DISC
-        self.VAE_GAN_loss = self.L_total + self.Loss_Mean_Sigma
+        self.VAE_GAN_loss = self.L_total
 
         t_vars = tf.trainable_variables()
 
@@ -170,6 +151,67 @@ class VAE_GAN1():
         gradients_EC = trainer_EC.compute_gradients(self.VAE_GAN_loss, var_list=self.g_vars+self.e_vars)
         self.opti_EC = trainer_EC.apply_gradients(gradients_EC)
 
+#class NNS():
+#    @stati
+class VAE_V2():
+    def __init__(self):
+
+        mp_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, MAP_BOX_SIZE, MAP_BOX_SIZE, MAP_BOX_SIZE ,1])
+        vx_real = tf.placeholder(tf.float32, shape=[BATCH_SIZE, VX_BOX_SIZE, VX_BOX_SIZE, VX_BOX_SIZE ,N_CHANNELS])
+
+        self.vx_real = vx_real
+        self.mp_real = mp_real
+
+        self.learn_rate_init = 0.03
+
+        #Learning Rate
+        self.global_step = tf.Variable(0, trainable=False)
+        self.add_global = self.global_step.assign_add(1)
+        self.new_learning_rate = tf.train.exponential_decay(self.learn_rate_init, global_step=self.global_step, decay_steps=10000,
+                                                   decay_rate=0.98)
+
+        self.log_vars = []
+
+        'ENCODER'
+        self.z_mean, self.z_sigm = Encode(self.vx_real)
+        #KL loss
+        self.kl_loss = tf.reduce_mean(KL_loss(self.z_mean, self.z_sigm)/(BATCH_SIZE*125))
+
+        'DECODER (GENERATOR)'
+        #inputs
+        self.ep = tf.random_normal(shape=self.z_mean.get_shape(),stddev=0.1)
+        self.zp = tf.random_normal(shape=self.z_mean.get_shape())
+        self.z_x = tf.add(self.z_mean, tf.sqrt(tf.exp(self.z_sigm))*self.ep)
+        #generate
+        self.mp_fake = Generate(self.z_x, reuse=False)
+        self.mp_rand = Generate(self.zp, reuse=True)
+        self.reconstr_loss = tf.losses.mean_squared_error(self.mp_real, self.mp_fake)
+
+
+        #For encode
+        self.encode_loss = tf.reduce_mean(self.kl_loss) #- self.LL_loss / (256*100.0)
+        t_vars = tf.trainable_variables()
+
+        self.e_vars = [var for var in t_vars if 'e_' in var.name]
+        self.g_vars = [var for var in t_vars if 'gen_' in var.name]
+
+
+        self.generator_loss = self.reconstr_loss + self.encode_loss   # average over batch
+
+        self.log_vars.append(("e_loss", self.encode_loss))
+        self.log_vars.append(("g_loss", self.generator_loss))
+        self.log_vars.append(("reconstr_loss", self.reconstr_loss))
+        self.saver = tf.train.Saver()
+
+
+        #trainers
+        #VAE
+        self.trainer_VAE = tf.train.RMSPropOptimizer(learning_rate=self.new_learning_rate)
+        self.gradients_VAE = self.trainer_VAE.compute_gradients(self.generator_loss, var_list=self.e_vars+self.g_vars)
+        self.opti_VAE = self.trainer_VAE.apply_gradients(self.gradients_VAE)
+
+        self.dbg1 = self.encode_loss
+        self.dbg2 = self.reconstr_loss
 
 
 def KL_loss( mu, log_var):
@@ -215,9 +257,9 @@ def Encode(x):
 
 def discriminate( mp, vx, reuse=False):
     paddings =  tf.constant([[0,0],
-                             [(NBOX_IN-NBOX_OUT)//2,(NBOX_IN-NBOX_OUT)//2],\
-                             [(NBOX_IN-NBOX_OUT)//2,(NBOX_IN-NBOX_OUT)//2],\
-                             [(NBOX_IN-NBOX_OUT)//2,(NBOX_IN-NBOX_OUT)//2],\
+                             [(VX_BOX_SIZE-MAP_BOX_SIZE)//2,(VX_BOX_SIZE-MAP_BOX_SIZE)//2],\
+                             [(VX_BOX_SIZE-MAP_BOX_SIZE)//2,(VX_BOX_SIZE-MAP_BOX_SIZE)//2],\
+                             [(VX_BOX_SIZE-MAP_BOX_SIZE)//2,(VX_BOX_SIZE-MAP_BOX_SIZE)//2],\
                              [0,0]])
     mp_pad = tf.pad(mp,paddings,mode='CONSTANT')
     x_var= tf.concat([vx, mp_pad], 4)

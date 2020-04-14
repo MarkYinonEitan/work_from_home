@@ -129,12 +129,11 @@ class EMmaps(object):
 
 
 class DBcreator(object):
-    def __init__(self, input_pdb_folder = TEMP_FOLDER, mrc_maps_folder = TEMP_FOLDER,target_folder = TEMP_FOLDER, file_name_prefix = 'DBfrom_', list_file_name=defoult_rotamers_file_name,  label = LabelbyAAType, box_center = BoxCenterAtCG, resolution = 3.0,    normalization = NoNormalization, dist_thr = DEFAULT_DIST_THRESHOLD, step_for_detection = DEFAULT_STEP_FOR_DETECTION,debug_file=DEBUG_FILE,is_corners = False,        use_list = False ):
+    def __init__(self, input_pdb_folder = TEMP_FOLDER, mrc_maps_folder = TEMP_FOLDER,target_folder = TEMP_FOLDER, list_file_name=defoult_rotamers_file_name,  label = LabelbyAAType, box_center = BoxCenterAtCG, resolution = 3.0,    normalization = NoNormalization, dist_thr = DEFAULT_DIST_THRESHOLD, step_for_detection = DEFAULT_STEP_FOR_DETECTION,debug_file=DEBUG_FILE,is_corners = False,        use_list = False ):
         """         """
         self.input_pdb_folder = input_pdb_folder+'/'
         self.mrc_maps_folder = mrc_maps_folder+'/'
         self.target_folder = target_folder+'/'
-        self.file_name_prefix = file_name_prefix
         self.resolution = resolution
         self.rotamers_by_pdb_dict = read_rotamers_data_text_file(list_file_name)
         self.label = label
@@ -321,7 +320,7 @@ class DBcreator(object):
         mrc_file_full_name = self.mrc_maps_folder+mrc_file
 
         if file_name==[]:
-            file_name = self.file_name_prefix + mrc_file[:-4]+file_name_suffix
+            file_name =  mrc_file[:-4]+file_name_suffix
         file_name_pref = self.target_folder+file_name
 
 

@@ -1,0 +1,110 @@
+import os
+import sys
+import time
+import numpy
+import random
+import matplotlib.pyplot as plt
+
+if '__file__' in locals():
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+else:
+    dir_path = os.getcwd()
+utils_path = dir_path + '/../utils/'
+sys.path.append(utils_path)
+
+import network3
+reload(network3)
+from network3 import Network 
+from network3 import ConvPoolLayer3D, FullyConnectedLayer, SoftmaxLayer
+from network3 import ReLU 
+
+import networkanalyser
+reload(networkanalyser)
+import resultsplots
+reload(resultsplots)
+import dbcreator
+reload(dbcreator)
+import dbloader
+reload(dbloader)
+
+from networkanalyser import NetworkAnalyser
+from dbloader import DBLoader
+from dbcreator import LabelbyAAType
+from resultsplots import SingleNetResults
+
+
+#parameters
+
+batch_span=range(100,400,20)
+mini_batch_size = 200
+res=3
+apix = 1
+N_valid = 100
+N_epoch = 10
+N_total_epochs = 5
+labels_to_names = LabelbyAAType.get_labels_to_names_dict()
+data_folder = dir_path +'/../../data/'
+res_folder = data_folder + '/nets_data/first_CNN_3A/'
+
+
+print 'DEBUG 10', ' next lines works -commented with ### works ### '
+
+
+# data base
+data_loader = DBLoader(apix,res)
+
+all_pdbs = data_loader.get_all_pdbs()
+random.shuffle(all_pdbs)
+N_pdbs = len(all_pdbs)
+validation_pdbs = all_pdbs[-N_valid:]
+train_per_miniepoch = [all_pdbs[:-N_valid]]
+print 'DEBUG 31','small train set'
+train_per_miniepoch = [train_per_miniepoch[0][0:2000]]
+
+
+data_loader.set_valid_data(validation_pdbs)
+data_loader.set_train_data(train_per_miniepoch)
+
+
+
+## create network
+
+layers = [  ConvPoolLayer3D(image_shape=(mini_batch_size, 1, 11, 11,11), 
+                    filter_shape=(20, 1, 4, 4,4), poolsize=(2, 2,2),activation_fn=ReLU),
+            FullyConnectedLayer(n_in=20*4*4*4, n_out=100,activation_fn=ReLU),
+            SoftmaxLayer(n_in=100, n_out=21)]
+net = Network(layers,mini_batch_size)
+
+#create networkanalyser 
+net_anal = NetworkAnalyser(net, res_folder)
+
+#### analyze
+# mini batch size
+net_anal.plot_time_vs_mini_batch_size(batch_span=batch_span,N_train = 100000)
+
+
+## Data
+valid_data = data_loader.get_valid_data_shared()
+train_data = data_loader.get_training_data_shared(0)
+## Train 
+test_data = valid_data
+res_per_epoch_1 = net.SGD(train_data,50,mini_batch_size,0.03, valid_data,test_data,lmbda=0.01)
+
+# save nets
+net.save_weights(res_folder + '/weights_25epochs.pkl.gz')
+net.load_weights(res_folder + '/weights_25epochs.pkl.gz')
+res_per_epoch_2 = net.SGD(train_data,50,mini_batch_size,0.003, valid_data,test_data,lmbda=0.01)
+
+res_per_epoch= res_per_epoch_1+ res_per_epoch_2
+
+## Plot Results
+valid_data_cpu = (valid_data[0].eval(),valid_data[1].eval())
+res_data = SingleNetResults(res_folder, labels_to_names,res_per_epoch=res_per_epoch, valid_data=valid_data_cpu)
+res_data.save_data()
+
+res_data = SingleNetResults(res_folder, labels_to_names)
+res_data.load_data()
+res_data.calc_results()
+res_data.save_detection_graphs_one_run()
+
+

@@ -1,6 +1,16 @@
 from tensorflow.python.client import device_lib
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import sys, os
+
+# Disable
+def blockPrint():
+    sys.stdout = open(os.devnull, 'w')
+
+# Restore
+def enablePrint():
+    sys.stdout = sys.__stdout__
+
 
 def get_available_gpus():
     local_device_protos = device_lib.list_local_devices()

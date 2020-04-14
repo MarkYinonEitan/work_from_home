@@ -14,50 +14,16 @@ else:
     dir_path = os.getcwd()
 python_path = dir_path + '/../python/'
 sys.path.append(python_path)
+import copy
 
 
 
-import dataset_loader
-importlib.reload(dataset_loader)
-from dataset_loader import EM_DATA_REAL_SYTH, EM_DATA,EM_DATA_DISC_RANDOM
-from dataset_loader import BATCH_SIZE, NBOX_IN,NBOX_OUT,N_CHANNELS
-from dataset_loader import getbox
-import net_3d_5
+import dbloader
+importlib.reload(dbloader)
+from dbloader import  EM_DATA
+from dbloader import VX_BOX_SIZE, MAP_BOX_SIZE, N_CHANNELS, BATCH_SIZE
 import utils, utils_project
 from utils import get_available_gpus
-
-
-Init_files={}
-Init_files["DISC"] = "/specific/netapp5_2/iscb/wolfson/Mark/data/NNcourse_project/data/results/disc_exp/network_test/1300.ckpt"
-
-Init_files["VAE"] ="/specific/netapp5_2/iscb/wolfson/Mark/data/NNcourse_project/data/results/vae_res6/network_test/1200.ckpt"
-
-#define folders
-#base_data_folder = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/"
-base_data_folder = "/Users/markroza/Documents/work_from_home/NNcourse_project/data/"
-#base_data_folder = "/specific/netapp5_2/iscb/wolfson/Mark/data/NNcourse_project/data/"
-data_fld = base_data_folder + "/res6/synth_exp/"
-out_fld = base_data_folder + "/results/vaegan_res6/"
-
-
-
-
-def get_data_for_train( vx_fold = None,list_file = None):
-
-
-    pdb_emd_pairs = utils_project.read_list_file(list_file)
-    in_train  = list(filter(lambda x: pdb_emd_pairs[x][3] == "TRAIN", range(len(pdb_emd_pairs))))
-    real_train_pdbs = [pdb_emd_pairs[x][0] for x in in_train]
-    print("DEBUG 2354",real_train_pdbs)
-
-    in_test  = list(filter(lambda x: pdb_emd_pairs[x][3] == "TEST", range(len(pdb_emd_pairs))))
-    real_test_pdbs = [pdb_emd_pairs[x][0] for x in in_test]
-
-    real_data_train = EM_DATA(vx_fold,train_pdbs = real_train_pdbs, is_random = True)
-
-    real_data_test = EM_DATA(vx_fold,train_pdbs = real_test_pdbs, is_random = True)
-
-    return real_data_train, real_data_test
 
 def set_out_folders(out_fld = None):
         ## organize folders
@@ -203,7 +169,60 @@ def run_training(real_data_train,real_data_test, net_string = 'None',out_fld = N
                     saved_path = saver.save(sess, model_path + str(batch) + ".ckpt")
                     saver.restore(sess,model_path + str(batch) + ".ckpt")
                     print("Model Saved")
-    #                map_gen = sess.run(nn.mp_fake,feed_dict=fd)
-    #                res = {"inp":vx_real,"mp_real":mp_real,"mp_gen":map_gen}
-    #                with  open(test_res_folder + str(batch) + ".pkl", 'wb') as out_file:
-    #                    pickle.dump(res, out_file)
+
+
+def run_test(test_data, net_string = 'None', vae_gan_file = 'None'):
+
+
+    #Initialize Netowrk
+    vae_gan = utils_project.get_net_by_string(net_string)
+
+    #initalize ouputs
+    res_dict = copy.deepcopy(test_data.train_data_dict["data"])
+    gan_maps = [np.zeros([MAP_BOX_SIZE,MAP_BOX_SIZE,MAP_BOX_SIZE])]*test_data.N_train
+
+    #Load one file
+    real_iter_test = test_data.train_dataset.make_initializable_iterator()
+    real_pair_test = real_iter_test.get_next()
+
+    # open session and initialize all variables
+    config = tf.ConfigProto(log_device_placement=False)
+    config.gpu_options.allow_growth = True
+
+    with tf.Session(config=config) as sess:
+
+        saver = tf.train.Saver()
+
+        #sess = tf.InteractiveSession()
+        tf.global_variables_initializer().run()
+        saver.restore(sess, vae_gan_file)
+
+        sess.run(real_iter_test.initializer)
+
+        gan_maps = [np.zeros([MAP_BOX_SIZE,MAP_BOX_SIZE,MAP_BOX_SIZE])]*test_data.N_train
+        for k in range(test_data.N_train):
+
+            if k%BATCH_SIZE == 0:
+                print(k, test_data.N_train)
+                inp_batch = np.zeros([BATCH_SIZE,VX_BOX_SIZE,VX_BOX_SIZE,VX_BOX_SIZE,N_CHANNELS])
+                out_batch = np.zeros([BATCH_SIZE,MAP_BOX_SIZE,MAP_BOX_SIZE,MAP_BOX_SIZE,1])
+                n = 0
+                kn = [-1]*BATCH_SIZE
+
+            (vx_map, em_map) = dbloader.get_data_point(test_data.train_data_dict,k)
+            inp_batch[n,:,:,:,:] = vx_map
+            out_batch[n,:,:,:,:] = em_map
+
+            kn[n]=k
+            n=n+1
+
+            if n==BATCH_SIZE or k==test_data.N_train:
+                map_out, r_loss, gan_disc_res = sess.run([vae_gan.mp_fake, vae_gan.reconstr_loss, vae_gan.D_loss_fake],feed_dict={vae_gan.vx_real: inp_batch, vae_gan.mp_real: out_batch})
+                print(r_loss, np.mean(out_batch),np.mean(map_out),np.std(out_batch),np.std(map_out))
+                for i in range(n-1):
+                    gan_maps[kn[i]]=np.squeeze(map_out[i,:,:,:,:])
+                    res_dict[kn[i]]["RC_loss"] = r_loss
+                    res_dict[kn[i]]["gan_disc_res"] = gan_disc_res
+                    res_dict[kn[i]]["MAP_SOURCE"] = "GAN"
+
+    return gan_maps, res_dict

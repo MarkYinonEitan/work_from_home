@@ -11,11 +11,12 @@ from VolumeViewer import volume_from_grid_data
 from VolumeViewer import open_volume_file
 
 
-cur_pass = os.path.realpath(__file__)
+cur_pass = os.path.dirname(os.path.realpath(__file__))
 
 utils_path = cur_pass + '/../python/'
 chimera_path = cur_pass + '/../chimera/'
 sys.path.append(utils_path)
+sys.path.append(chimera_path)
 
 
 import dbcreator
@@ -35,20 +36,17 @@ def create_db_n_m_file(input_list_file, input_folder, output_folder, error_list_
     dbc = DBcreator( input_pdb_folder = input_pdb_folder,
                             mrc_maps_folder = mrc_maps_folder,
                             target_folder = target_folder,
-                            file_name_prefix = 'DB_from_',
-                            apix = 1.0,
                             label=LabelbyAAType,
                             box_center=BoxCenterAtCG,
                             normalization =Mean0Sig1Normalization,
                             list_file_name = None,
-                            cubic_box_size = 11,
                             is_corners = True,
                             use_list = False)
 
 
     runCommand('close all')
 
-    creation_triples=[]
+    creation_dicts=[]
 
     for data_row in list_data:
         input_pdb_file =   data_row["pdb_file"]
@@ -61,24 +59,24 @@ def create_db_n_m_file(input_list_file, input_folder, output_folder, error_list_
         limit_boxes      = dbcreator.get_regions(input_folder + input_pdb_file,N_divide)
 
         for l_box in limit_boxes:
-            creation_triples.append({"pdb_file":input_pdb_file, "emd_file":input_mrc_file, "limit_box":l_box})
+            creation_dicts.append({"pdb_file":input_pdb_file, "emd_file":input_mrc_file, "limit_box":l_box, "map_source":data_row["map_source"] })
 
 
 
     for k in range(n,m):
-        if k>=len(creation_triples):
+        if k>=len(creation_dicts):
             return
-        print(n,m,k,creation_triples[k]["emd_file"],creation_triples[k]["pdb_file"],creation_triples[k]["limit_box"])
+        print(n,m,k,creation_dicts[k]["emd_file"],creation_dicts[k]["pdb_file"],creation_dicts[k]["limit_box"])
         try:
-            dbc.create_class_db_corners(creation_triples[k]["emd_file"], creation_triples[k]["pdb_file"], limits_pdb = creation_triples[k]["limit_box"], file_name_suffix = '_'+str(k) )
+            dbc.create_class_db_corners(creation_dicts[k]["emd_file"], creation_dicts[k]["pdb_file"], limits_pdb = creation_dicts[k]["limit_box"], map_source = creation_dicts[k]["map_source"], file_name_suffix = '_'+str(k) )
         except Exception as e:
             with open(error_list_file,"a") as f:
                 d = out_list[-1]
-                f.write(creation_triples[k]["emd_file"])
+                f.write(creation_dicts[k]["emd_file"])
                 f.write('\n')
-                f.write(creation_triples[k]["pdb_file"])
+                f.write(creation_dicts[k]["pdb_file"])
                 f.write('\n')
-                f.write(creation_triples[k]["limit_box"])
+                f.write(creation_dicts[k]["limit_box"])
                 f.write('\n')
                 f.write(sys.exc_info()[0])
                 f.write('================\n')

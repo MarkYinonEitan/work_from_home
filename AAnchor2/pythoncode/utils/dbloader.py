@@ -190,12 +190,13 @@ def load_train_data_to_dict(file_name_s, empty_dict):
 
     empty_dict["labels"] = [x["label"] for x in empty_dict["data"]]
 
+    print("DEBUG 21213", empty_dict["labels"])
+    error
 
     #add None Label
-    empty_dict["boxes"].append(np.zeros(empty_dict["boxes"][-1].shape))
+    empty_dict["boxes"].append(np.ones(empty_dict["boxes"][-1].shape))
     empty_dict["labels"].append(0)
     empty_dict["data"].append(empty_dict["data"][0])
-
 
     stop = timeit.default_timer()
 
